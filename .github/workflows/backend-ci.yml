@@ -13,7 +13,7 @@ jobs:
 
     defaults:
       run:
-        working-directory: ./backend/services/user-service
+        working-directory: ./backend/services/user_service
 
     steps:
       - name: Check out code

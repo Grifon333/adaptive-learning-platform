@@ -45,10 +45,15 @@ def login_for_access_token(
         .first()
     )
 
-    # Перевірка користувача та пароля
-    if not db_user or not security.verify_password(
-        user_credentials.password, db_user.password_hash
-    ):
+    if not db_user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    assert isinstance(db_user.password_hash, str)
+    if not security.verify_password(user_credentials.password, db_user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
