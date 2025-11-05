@@ -1,0 +1,64 @@
+services:
+  # 1. PostgreSQ: для реляційних даних (користувачі, профілі, траєкторії)
+  postgres:
+    image: postgres:15-alpine
+    container_name: alp_postgres
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: password123
+      POSTGRES_DB: adaptive_learning_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - adaptive_network
+
+  # 2. Neo4j: для Графа знань (концепції, пререквізити)
+  neo4j:
+    image: neo4j:5.12
+    container_name: alp_neo4j
+    environment:
+      - NEO4J_AUTH=neo4j/password123
+      - NEO4J_PLAGINS=["apoc","graph-data-science"]
+    ports:
+      - "7474:7474" # HTTP
+      - "7687:7687" # Bolt
+    volumes:
+      - neo4j_data:/data
+    networks:
+      - adaptive_network
+
+  # 3. MongoDB: для логування подій та поведінкових патернів
+  mongodb:
+    image: mongo:7.0
+    container_name: alp_mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - adaptive_network
+
+  # 4. Redis: для кешування, сесій та як брокер для Celery
+  redis:
+    image: redis:7-alpine
+    container_name: alp_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - adaptive_network
+
+# Томи для збереження даних
+volumes:
+  postgres_data:
+  neo4j_data:
+  mongo_data:
+  redis_data:
+
+# Мережа для взаємодії контейнерів
+networks:
+  adaptive_network:
+    driver: bridge

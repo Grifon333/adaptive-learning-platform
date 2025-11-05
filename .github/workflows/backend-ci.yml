@@ -1,0 +1,35 @@
+name: Backend CI (User Service)
+
+on:
+  push:
+    branches: ["main", "develop"]
+  pull_request:
+    branches: ["main", "develop"]
+
+jobs:
+  test:
+    name: Run Linters & Tests
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ./backend/services/user-service
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install Poetry
+        run: |
+          pip install poetry
+          poetry config virtualenvs.in-project true
+      - name: Install dependencies
+        run: poetry install --no-root
+      - name: Run Linters (Ruff)
+        run: poetry run ruff check .
+      - name: Run Type Checking (Mypy)
+        run: poetry run mypy src
+      # - name: Run Tests
