@@ -51,6 +51,52 @@ services:
     networks:
       - adaptive_network
 
+  user_service:
+    build:
+      context: ./backend/services/user_service
+    container_name: alp_user_service
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://admin:password123@postgres:5432/adaptive_learning_db
+      - SECRET_KEY=my-super-secret-key-for-jwt
+      - ALGORITHM=HS256
+      - ACCESS_TOKEN_EXPIRE_MINUTES=60
+    depends_on:
+      - postgres
+    networks:
+      - adaptive_network
+
+  knowledge_graph_service:
+    build:
+      context: ./backend/services/knowledge_graph_service
+    container_name: alp_kg_service
+    ports:
+      - "8001:8000"
+    environment:
+      - NEO4J_URL=bolt://neo4j:7687
+      - NEO4J_USER=neo4j
+      - NEO4J_PASSWORD=password123
+    depends_on:
+      - neo4j
+    networks:
+      - adaptive_network
+
+  learning_path_service:
+    build:
+      context: ./backend/services/learning_path_service
+    container_name: alp_path_service
+    ports:
+      - "8002:8000"
+    environment:
+      - USER_SERVICE_URL=http://user_service:8000
+      - KG_SERVICE_URL=http://knowledge_graph_service:8000
+    depends_on:
+      - postgres
+      - neo4j
+    networks:
+      - adaptive_network
+
 # Томи для збереження даних
 volumes:
   postgres_data:
