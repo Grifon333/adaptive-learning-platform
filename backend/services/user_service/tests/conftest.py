@@ -6,6 +6,7 @@ from alembic import command
 from alembic.config import Config
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
+from sqlalchemy.engine.url import make_url
 from sqlalchemy.orm import sessionmaker
 
 project_root = os.path.realpath(os.path.join(os.path.dirname(__file__), ".."))
@@ -20,34 +21,45 @@ TEST_DATABASE_URL = os.getenv("DATABASE_URL")
 
 @pytest.fixture(scope="session")
 def engine():
-    """Створює 'engine' для тестової БД на всю сесію тестів."""
+    """Creates an 'engine' for the test database for the entire test session."""
     return create_engine(TEST_DATABASE_URL)
 
 
 @pytest.fixture(scope="session")
-def setup_database(engine):
+def setup_database():
     """
     (Runs once per session)
     Creates a test database, runs Alembic migrations, and deletes everything after the tests.
     """
-    conn = engine.connect()
-    conn = conn.execution_options(isolation_level="AUTOCOMMIT")
-    try:
-        conn.exec_driver_sql(f'CREATE DATABASE "{engine.url.database}"')
-    except Exception:
-        pass
-    finally:
-        conn.close()
+    if not TEST_DATABASE_URL:
+        raise RuntimeError(
+            "DATABASE_URL is not set. Set it to your test DB, e.g. postgresql://admin:password123@localhost:5432/adaptive_learning_test_db"
+        )
+
+    url = make_url(TEST_DATABASE_URL)
+    target_db_name = url.database
+
+    # Connect to the default 'postgres' database to create the target DB if missing
+    admin_url = url.set(database="postgres")
+    admin_engine = create_engine(admin_url)
+    with admin_engine.connect() as admin_conn:
+        admin_conn = admin_conn.execution_options(isolation_level="AUTOCOMMIT")
+        try:
+            admin_conn.exec_driver_sql(f'CREATE DATABASE "{target_db_name}"')
+        except Exception:
+            # DB likely exists already; ignore
+            pass
 
     os.environ["DATABASE_URL"] = TEST_DATABASE_URL
     alembic_cfg = Config("alembic.ini")
     command.upgrade(alembic_cfg, "head")
 
-    # In case the migration is empty or does not create tables, let's create them from models
-    Base.metadata.create_all(bind=engine)
+    # In case the migration is empty or does not create tables, ensure tables exist
+    runtime_engine = create_engine(TEST_DATABASE_URL)
+    Base.metadata.create_all(bind=runtime_engine)
 
     yield  # Run tests
-    Base.metadata.drop_all(bind=engine)
+    Base.metadata.drop_all(bind=runtime_engine)
 
 
 @pytest.fixture(scope="function")
