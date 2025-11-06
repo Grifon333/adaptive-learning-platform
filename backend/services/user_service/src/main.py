@@ -1,4 +1,4 @@
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, Form, HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -37,13 +37,22 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
 
 @app.post("/api/v1/auth/login", response_model=schemas.Token)
 def login_for_access_token(
-    user_credentials: schemas.UserLogin, db: Session = Depends(get_db)
+    user_credentials: schemas.UserLogin | None = None,
+    email: str | None = Form(None),
+    password: str | None = Form(None),
+    db: Session = Depends(get_db),
 ):
-    db_user = (
-        db.query(models.User)
-        .filter(models.User.email == user_credentials.email)
-        .first()
-    )
+    # Підтримка як JSON (schemas.UserLogin), так і form-data (email/password)
+    cred_email = user_credentials.email if user_credentials else email
+    cred_password = user_credentials.password if user_credentials else password
+
+    if not cred_email or not cred_password:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Email and password are required",
+        )
+
+    db_user = db.query(models.User).filter(models.User.email == cred_email).first()
 
     if not db_user:
         raise HTTPException(
@@ -53,7 +62,7 @@ def login_for_access_token(
         )
 
     assert isinstance(db_user.password_hash, str)
-    if not security.verify_password(user_credentials.password, db_user.password_hash):
+    if not security.verify_password(cred_password, db_user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
