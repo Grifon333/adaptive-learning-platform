@@ -1,4 +1,7 @@
-from pydantic import BaseModel, EmailStr, Field
+import uuid
+from typing import Any
+
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 class UserCreate(BaseModel):
@@ -20,3 +23,19 @@ class Token(BaseModel):
 
 class TokenData(BaseModel):
     email: EmailStr | None = None
+
+
+class StudentProfile(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    user_id: uuid.UUID
+    cognitive_profile: dict[str, Any]
+    learning_preferences: dict[str, Any]
+    timezone: str | None
+
+
+class StudentProfileUpdate(BaseModel):
+    cognitive_profile: dict[str, Any] | None = None
+    learning_preferences: dict[str, Any] | None = None
+    timezone: str | None = None
