@@ -20,7 +20,7 @@ services:
     container_name: alp_neo4j
     environment:
       - NEO4J_AUTH=neo4j/password123
-      - NEO4J_PLAGINS=["apoc","graph-data-science"]
+      - NEO4J_PLUGINS=["apoc","graph-data-science"]
     ports:
       - "7474:7474" # HTTP
       - "7687:7687" # Bolt

@@ -1,0 +1,19 @@
+from pydantic import ConfigDict
+from pydantic_settings import BaseSettings
+
+
+class Settings(BaseSettings):
+    LOG_LEVEL: str = "INFO"
+
+    SECRET_KEY: str
+    ALGORITHM: str
+    ACCESS_TOKEN_EXPIRE_MINUTES: int
+
+    model_config = ConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",  # Ignore extra environment variables not defined in the model
+    )
+
+
+settings = Settings()
