@@ -1,6 +1,6 @@
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, Form, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, status
 from loguru import logger
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -26,21 +26,34 @@ app = FastAPI(title="User Service", lifespan=lifespan)
 def get_current_user(
     token: str = Depends(security.oauth2_scheme),
     db: Session = Depends(get_db),
-):
+) -> models.User:
     """
     Decodes the token, finds the user in the database, and returns it.
     This protects endpoints.
     """
-    payload = security.decode_access_token(token)
-    if payload is None:
+    token_data = security.decode_access_token(token)
+    if token_data is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    email = payload.get("sub")
-    user = db.query(models.User).filter(models.User.email == email).first()
+    if token_data.token_type != "access":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token type, expected 'access'",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    if token_data.user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    user = db.query(models.User).filter(models.User.id == token_data.user_id).first()
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -84,16 +97,14 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
 
 @app.post("/api/v1/auth/login", response_model=schemas.Token)
 def login_for_access_token(
-    user_credentials: schemas.UserLogin | None = None,
-    email: str | None = Form(None),
-    password: str | None = Form(None),
+    user_credentials: schemas.UserLogin,
     db: Session = Depends(get_db),
 ):
     """
     Logs in a user and returns an access token.
     """
-    cred_email = user_credentials.email if user_credentials else email
-    cred_password = user_credentials.password if user_credentials else password
+    cred_email = user_credentials.email
+    cred_password = user_credentials.password
     logger.info(f"Logging in user: {cred_email}")
 
     if not cred_email or not cred_password:
@@ -123,16 +134,20 @@ def login_for_access_token(
         )
 
     # Creating a JWT token
-    access_token = security.create_access_token(
-        data={"sub": db_user.email, "role": db_user.role}
-    )
+    subject_data = {"sub": str(db_user.id)}
+    access_token = security.create_access_token(data=subject_data)
+    refresh_token = security.create_refresh_token(data=subject_data)
 
     # Updating the last login time
     db_user.last_login = func.now()
     db.commit()
 
     logger.success(f"User successfully logged in: {db_user.email}")
-    return {"access_token": access_token, "token_type": "bearer"}
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+    }
 
 
 @app.get("/api/v1/users/me/profile", response_model=schemas.StudentProfile)

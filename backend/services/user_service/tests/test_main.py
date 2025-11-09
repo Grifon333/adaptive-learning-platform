@@ -58,7 +58,8 @@ def test_login_user_success(client: TestClient, db_session: Session):
         "email": test_user_data["email"],
         "password": test_user_data["password"],
     }
-    response = client.post("/api/v1/auth/login", data=login_data)
+    # login_data = schemas.
+    response = client.post("/api/v1/auth/login", json=login_data)
 
     assert response.status_code == 200
     response_data = response.json()
@@ -82,7 +83,7 @@ def test_login_user_wrong_password(client: TestClient, db_session: Session):
     db_session.commit()
 
     login_data = {"email": test_user_data["email"], "password": "WrongPassword!"}
-    response = client.post("/api/v1/auth/login", data=login_data)
+    response = client.post("/api/v1/auth/login", json=login_data)
 
     assert response.status_code == 401
     assert response.json()["detail"] == "Incorrect email or password"
@@ -96,7 +97,7 @@ def login_user(client: TestClient) -> str:
         "email": test_user_data["email"],
         "password": test_user_data["password"],
     }
-    response = client.post("/api/v1/auth/login", data=login_data)
+    response = client.post("/api/v1/auth/login", json=login_data)
     assert response.status_code == 200
     return response.json()["access_token"]
 
