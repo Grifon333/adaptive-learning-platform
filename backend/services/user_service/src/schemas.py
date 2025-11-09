@@ -18,11 +18,13 @@ class UserLogin(BaseModel):
 
 class Token(BaseModel):
     access_token: str
+    refresh_token: str
     token_type: str
 
 
 class TokenData(BaseModel):
-    email: EmailStr | None = None
+    user_id: uuid.UUID | None = None
+    token_type: str = "access"
 
 
 class StudentProfile(BaseModel):
@@ -32,7 +34,7 @@ class StudentProfile(BaseModel):
     user_id: uuid.UUID
     cognitive_profile: dict[str, Any]
     learning_preferences: dict[str, Any]
-    timezone: str | None
+    timezone: str | None = None
 
 
 class StudentProfileUpdate(BaseModel):
