@@ -1,5 +1,6 @@
 import uuid
 from datetime import UTC, datetime, timedelta
+from typing import Literal
 
 from fastapi import HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
@@ -27,26 +28,34 @@ def get_password_hash(password):
     return pwd_context.hash(password)
 
 
-def create_access_token(data: dict, expires_delta: timedelta | None = None):
+def create_token(
+    data: dict,
+    token_type: Literal["access", "refresh"],
+    expires_delta: timedelta | None = None,
+) -> str:
     to_encode = data.copy()
+    now = datetime.now(UTC)
+
     if expires_delta:
-        expire = datetime.now(UTC) + expires_delta
+        expire = now + expires_delta
     else:
-        expire = datetime.now(UTC) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire, "iat": datetime.now(UTC), "token_type": "access"})
+        if token_type == "access":
+            minutes = ACCESS_TOKEN_EXPIRE_MINUTES
+        else:
+            minutes = REFRESH_TOKEN_EXPIRE_MINUTES
+        expire = now + timedelta(minutes=minutes)
+
+    to_encode.update({"exp": expire, "iat": now, "token_type": token_type})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
 
-def create_refresh_token(data: dict, expires_delta: timedelta | None = None):
-    to_encode = data.copy()
-    if expires_delta:
-        expire = datetime.now(UTC) + expires_delta
-    else:
-        expire = datetime.now(UTC) + timedelta(minutes=REFRESH_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire, "iat": datetime.now(UTC), "token_type": "refresh"})
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    return encoded_jwt
+def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
+    return create_token(data=data, token_type="access", expires_delta=expires_delta)
+
+
+def create_refresh_token(data: dict, expires_delta: timedelta | None = None) -> str:
+    return create_token(data=data, token_type="refresh", expires_delta=expires_delta)
 
 
 def decode_access_token(token: str) -> schemas.TokenData:
