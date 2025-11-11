@@ -46,7 +46,7 @@ def create_token(
         expire = now + timedelta(minutes=minutes)
 
     to_encode.update({"exp": expire, "iat": now, "token_type": token_type})
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    encoded_jwt: str = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
 
