@@ -1,0 +1,22 @@
+name: app_services
+description: "Basic implementation of services (for iOS/Android)."
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  i_app_services:
+    path: ../../i_app_services
+
+  flutter_secure_storage: ^9.2.4
+  shared_preferences: ^2.5.3
+  path_provider: ^2.1.5
+  geolocator: ^14.0.2
+
+dev_dependencies:
+  flutter_lints: ^6.0.0

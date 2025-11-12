@@ -39,6 +39,14 @@ dependencies:
   talker_bloc_logger: ^5.0.2
   talker_logger: ^5.0.2
 
+  # --- Service abstractions ---
+  i_app_services:
+    path: ./app_services/i_app_services
+
+  # --- Basic implementation of services ---
+  app_services:
+    path: app_services/base/app_services
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
