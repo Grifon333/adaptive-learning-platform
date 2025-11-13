@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:ui';
 
+import 'package:adaptive_learning_app/app/app.dart';
 import 'package:adaptive_learning_app/app/app_env.dart';
 import 'package:adaptive_learning_app/di/di_container.dart';
 import 'package:adaptive_learning_app/features/debug/debug_service.dart';
 import 'package:adaptive_learning_app/features/debug/i_debug_service.dart';
+import 'package:adaptive_learning_app/router/app_router.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -40,10 +42,16 @@ class AppRunner {
         Bloc.observer = _debugService.blocObserver;
         await _initApp();
         _initErrorHandlers(_debugService);
-        // TODO: _router = AppRouter;
-        // TODO: runApp(
-        //   App()
-        // );
+        _router = AppRouter.createRouter(_debugService);
+        runApp(
+          App(
+            router: _router,
+            initDependencies: () => _initDependencies(debugService: _debugService, env: env).timeout(
+              _initTimeout,
+              onTimeout: () => throw TimeoutException('Dependency initialization timeout exceeded ($_initTimeout)'),
+            ),
+          ),
+        );
       },
       (error, stackTrace) {
         // Handling errors that occur outside of Flutter (e.g., during initialization)
