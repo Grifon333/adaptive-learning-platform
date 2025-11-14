@@ -1,5 +1,6 @@
 import 'package:adaptive_learning_app/app/http/auth_interceptor.dart';
 import 'package:adaptive_learning_app/features/auth/domain/repository/i_auth_repository.dart';
+import 'package:dio/dio.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:i_app_services/i_app_services.dart';
@@ -37,9 +38,26 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     try {
       await _authRepository.login(email: event.email, password: event.password);
       emit(AuthAuthenticated());
-    } on Object catch (err, st) {
-      emit(AuthUnauthenticated(error: err.toString()));
-      addError(err, st);
+    } on Object catch (e, st) {
+      addError(e, st);
+      String errorMessage = 'An unknown error has occurred.';
+
+      if (e is DioException) {
+        if (e.response?.statusCode == 401) {
+          errorMessage = 'Incorrect email or password.';
+        } else if (e.response?.statusCode == 422) {
+          errorMessage = 'Email and password are required.';
+        } else if (e.type == DioExceptionType.connectionTimeout ||
+            e.type == DioExceptionType.sendTimeout ||
+            e.type == DioExceptionType.receiveTimeout ||
+            e.type == DioExceptionType.connectionError) {
+          errorMessage = 'Unable to connect to the server. Please check your internet connection.';
+        } else {
+          errorMessage = 'Server error. Please try again later.';
+        }
+      }
+
+      emit(AuthUnauthenticated(error: errorMessage));
     }
   }
 
@@ -53,9 +71,20 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         lastName: event.lastName,
       );
       emit(AuthRegisterSuccess());
-    } on Object catch (err, st) {
-      emit(AuthUnauthenticated(error: err.toString()));
-      addError(err, st);
+    } on Object catch (e, st) {
+      addError(e, st);
+      String errorMessage = 'An unknown error has occurred.';
+
+      if (e is DioException) {
+        if (e.response?.statusCode == 409) {
+          errorMessage = 'User with this email is already registered.';
+        } else if (e.type == DioExceptionType.connectionTimeout || e.type == DioExceptionType.connectionError) {
+          errorMessage = 'Unable to connect to the server. Please check your internet connection.';
+        } else {
+          errorMessage = 'Server error. Please try again later.';
+        }
+      }
+      emit(AuthUnauthenticated(error: errorMessage));
     }
   }
 

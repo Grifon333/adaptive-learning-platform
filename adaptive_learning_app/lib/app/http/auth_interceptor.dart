@@ -21,8 +21,15 @@ class AuthInterceptor extends QueuedInterceptor {
   final ISecureStorage _secureStorage;
   final IDebugService _debugService;
 
+  static const _publicRoutes = {
+    '/auth/login',
+    '/auth/register',
+    // TODO: add '/auth/refresh'
+  };
+
   @override
   Future<void> onRequest(RequestOptions options, RequestInterceptorHandler handler) async {
+    if (_publicRoutes.contains(options.path)) return handler.next(options);
     final accessToken = await _secureStorage.read(SecureStorageKeys.accessToken);
     if (accessToken != null) {
       options.headers['Authorization'] = 'Bearer $accessToken';
@@ -37,21 +44,23 @@ class AuthInterceptor extends QueuedInterceptor {
   void onError(DioException err, ErrorInterceptorHandler handler) {
     _debugService.logError('AuthInterceptor: Request error', error: err);
     if (err.response?.statusCode == 401) {
-      _debugService.logWarning('AuthInterceptor: Received 401. Refreshing token...');
+      if (err.requestOptions.path != '/auth/login') {
+        _debugService.logWarning('AuthInterceptor: Received 401. Refreshing token...');
 
-      // TODO: Implement token refresh logic
-      // 1. Get refresh token from _secureStorage
-      // 2. Make a request to POST /api/v1/auth/refresh
-      // 3. If successful:
-      //    - Save new access and refresh tokens
-      //    - Update the ‘Authorization’ header in err.requestOptions
-      //    - Repeat the request: return handler.resolve(await _httpClient.fetch(err.requestOptions));
-      // 4. If unsuccessful:
-      //    - Delete tokens
-      //    - “Fail” the request: return handler.next(err);
+        // TODO: Implement token refresh logic
+        // 1. Get refresh token from _secureStorage
+        // 2. Make a request to POST /api/v1/auth/refresh
+        // 3. If successful:
+        //    - Save new access and refresh tokens
+        //    - Update the ‘Authorization’ header in err.requestOptions
+        //    - Repeat the request: return handler.resolve(await _httpClient.fetch(err.requestOptions));
+        // 4. If unsuccessful:
+        //    - Delete tokens
+        //    - “Fail” the request: return handler.next(err);
 
-      // For now, we just “fail” the request
-      _debugService.logError('AuthInterceptor: Token refresh logic not implemented.');
+        // For now, we just “fail” the request
+        _debugService.logError('AuthInterceptor: Token refresh logic not implemented.');
+      }
       return handler.next(err);
     }
     super.onError(err, handler);

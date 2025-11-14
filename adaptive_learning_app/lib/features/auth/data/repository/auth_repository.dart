@@ -23,7 +23,7 @@ final class AuthRepository implements IAuthRepository {
     final response = await httpClient.post(
       '/auth/login',
       data: request.toJson(),
-      options: Options(contentType: Headers.formUrlEncodedContentType),
+      options: Options(contentType: Headers.jsonContentType),
     );
     final tokenResponse = TokenResponse.fromJson(response.data);
     await secureStorage.write(SecureStorageKeys.accessToken, tokenResponse.accessToken);
