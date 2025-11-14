@@ -11,7 +11,12 @@ class RegisterRequest {
 
   const RegisterRequest({required this.email, required this.password, required this.firstName, required this.lastName});
 
-  Map<String, dynamic> toJson() => {'email': email, 'password': password, 'firstName': firstName, 'lastName': lastName};
+  Map<String, dynamic> toJson() => {
+    'email': email,
+    'password': password,
+    'first_name': firstName,
+    'last_name': lastName,
+  };
 }
 
 @immutable
@@ -32,6 +37,6 @@ class TokenResponse {
   const TokenResponse({required this.accessToken, required this.refreshToken});
 
   factory TokenResponse.fromJson(Map<String, dynamic> map) {
-    return TokenResponse(accessToken: map['accessToken'] as String, refreshToken: map['refreshToken'] as String);
+    return TokenResponse(accessToken: map['access_token'] as String, refreshToken: map['refresh_token'] as String);
   }
 }
