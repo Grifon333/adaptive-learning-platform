@@ -13,5 +13,5 @@ abstract interface class IAuthRepository with DiBaseRepository {
     required String lastName,
   });
 
-  // TODO: logout()
+  Future<void> logout();
 }

@@ -40,4 +40,10 @@ final class AuthRepository implements IAuthRepository {
     final request = RegisterRequest(email: email, password: password, firstName: firstName, lastName: lastName);
     await httpClient.post('/auth/register', data: request.toJson());
   }
+
+  @override
+  Future<void> logout() async {
+    await secureStorage.delete(SecureStorageKeys.accessToken);
+    await secureStorage.delete(SecureStorageKeys.refreshToken);
+  }
 }

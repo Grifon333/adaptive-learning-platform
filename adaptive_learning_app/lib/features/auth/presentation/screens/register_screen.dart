@@ -2,6 +2,7 @@ import 'package:adaptive_learning_app/app/app_context_ext.dart';
 import 'package:adaptive_learning_app/features/auth/domain/bloc/bloc/auth_bloc.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 
 /// {@template register_screen}
 /// Registration screen
@@ -48,15 +49,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
       appBar: AppBar(title: Text(context.l10n.registerScreenTitle)),
       body: BlocConsumer<AuthBloc, AuthState>(
         listener: (context, state) {
-          if (state is AuthUnauthenticated && state.error != null) {
+          if (state is AuthRegisterFailure) {
+            ScaffoldMessenger.of(context).clearSnackBars();
             ScaffoldMessenger.of(
               context,
             ).showSnackBar(SnackBar(content: Text('Registration Failed: ${state.error}'), backgroundColor: Colors.red));
           }
           if (state is AuthRegisterSuccess) {
+            ScaffoldMessenger.of(context).clearSnackBars();
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text('Registration Successful! Please login.'), backgroundColor: Colors.green),
             );
+            context.go('/login');
           }
         },
         builder: (context, state) {
@@ -66,7 +70,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
             key: _formKey,
             child: Padding(
               padding: const EdgeInsets.all(16.0),
-              child: ListView(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   TextFormField(
                     controller: _firstNameController,

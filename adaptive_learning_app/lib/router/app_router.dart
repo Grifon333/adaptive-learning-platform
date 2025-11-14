@@ -15,27 +15,28 @@ import 'package:go_router/go_router.dart';
 /// Class for managing navigation in the application
 /// {@endtemplate}
 class AppRouter {
-  static final rootNavigationKey = GlobalKey<NavigatorState>();
+  static final rootNavigatorKey = GlobalKey<NavigatorState>();
   static const String initialLocation = '/splash';
 
   static GoRouter createRouter(IDebugService debugService, AuthBloc authBloc) {
     return GoRouter(
-      navigatorKey: rootNavigationKey,
+      navigatorKey: rootNavigatorKey,
       initialLocation: initialLocation,
       observers: [debugService.routeObserver],
       refreshListenable: GoRouterRefreshStream(authBloc.stream),
       redirect: (BuildContext context, GoRouterState state) {
         final authState = authBloc.state;
-        final isAuthRoute = state.matchedLocation == '/login' || state.matchedLocation == '/register';
-        if (authState is AuthUnknown) return state.matchedLocation == '/splash' ? null : '/splash';
+        final location = state.matchedLocation;
+        final isAuthRoute = location == '/login' || location == '/register';
+        if (authState is AuthUnknown) return location == '/splash' ? null : '/splash';
         if (authState is AuthAuthenticated) return isAuthRoute ? '/dashboard' : null;
-        if (authState is AuthUnauthenticated || authState is AuthRegisterSuccess) return isAuthRoute ? null : '/login';
+        if (authState is AuthUnauthenticated) return isAuthRoute ? null : '/login';
         return null;
       },
       routes: [
         // --- Main navigation (with BottomNavigationBar) ---
         StatefulShellRoute.indexedStack(
-          parentNavigatorKey: rootNavigationKey,
+          parentNavigatorKey: rootNavigatorKey,
           builder: (_, _, navigationShell) => RootScreen(navigationShell: navigationShell),
           branches: [
             // 1. Dashboard

@@ -40,7 +40,8 @@ class _LoginScreenState extends State<LoginScreen> {
       appBar: AppBar(title: Text(context.l10n.loginScreenTitle)),
       body: BlocConsumer<AuthBloc, AuthState>(
         listener: (context, state) {
-          if (state is AuthUnauthenticated && state.error != null) {
+          if (state is AuthLoginFailure) {
+            ScaffoldMessenger.of(context).clearSnackBars();
             ScaffoldMessenger.of(
               context,
             ).showSnackBar(SnackBar(content: Text('Login failed: ${state.error}'), backgroundColor: Colors.red));
