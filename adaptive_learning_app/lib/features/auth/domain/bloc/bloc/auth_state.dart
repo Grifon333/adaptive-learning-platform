@@ -8,19 +8,19 @@ sealed class AuthState extends Equatable {
   List<Object?> get props => [];
 }
 
-final class AuthInitial extends AuthState {}
+final class AuthUnknown extends AuthState {}
+
+final class AuthUnauthenticated extends AuthState {
+  const AuthUnauthenticated({this.error});
+
+  final String? error;
+
+  @override
+  List<Object?> get props => [error ?? ''];
+}
 
 final class AuthLoading extends AuthState {}
 
-final class AuthSuccess extends AuthState {}
+final class AuthAuthenticated extends AuthState {}
 
 final class AuthRegisterSuccess extends AuthState {}
-
-final class AuthFailure extends AuthState {
-  const AuthFailure(this.error);
-
-  final String error;
-
-  @override
-  List<Object> get props => [error];
-}

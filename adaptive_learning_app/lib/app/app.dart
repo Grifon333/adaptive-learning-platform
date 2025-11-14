@@ -2,21 +2,26 @@ import 'package:adaptive_learning_app/app/app_context_ext.dart';
 import 'package:adaptive_learning_app/app/app_providers.dart';
 import 'package:adaptive_learning_app/app/depends_providers.dart';
 import 'package:adaptive_learning_app/di/di_container.dart';
+import 'package:adaptive_learning_app/features/auth/domain/bloc/bloc/auth_bloc.dart';
 import 'package:adaptive_learning_app/features/error/error_screen.dart';
 import 'package:adaptive_learning_app/features/splash/splash_screen.dart';
 import 'package:adaptive_learning_app/l10n/gen/app_localizations.dart';
 import 'package:adaptive_learning_app/l10n/localization_notifier.dart';
+import 'package:adaptive_learning_app/router/app_router.dart';
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 
 /// {@template app}
 /// The main widget of the application that manages dependency
 /// initialization and displays the main interface.
 /// {@endtemplate}
 class App extends StatefulWidget {
-  const App({required this.router, required this.initDependencies, super.key});
+  const App({
+    // required this.router,
+    required this.initDependencies,
+    super.key,
+  });
 
-  final GoRouter router;
+  // final GoRouter router;
   final Future<DiContainer> Function() initDependencies;
 
   @override
@@ -44,7 +49,10 @@ class _AppState extends State<App> {
               return ErrorScreen(error: snapshot.error, stackTrace: snapshot.stackTrace, onRetry: _retryInit);
             }
             if (snapshot.hasData && snapshot.data != null) {
-              return _App(router: widget.router, diContainer: snapshot.data!);
+              return _App(
+                // router: widget.router,
+                diContainer: snapshot.data!,
+              );
             }
             return const SplashScreen(isFullScreen: true);
           },
@@ -63,15 +71,25 @@ class _AppState extends State<App> {
 /// after successful initialization of dependencies.
 /// {@endtemplate}
 class _App extends StatelessWidget {
-  const _App({required this.router, required this.diContainer});
+  const _App({
+    // required this.router,
+    required this.diContainer,
+  });
 
-  final GoRouter router;
+  // final GoRouter router;
   final DiContainer diContainer;
 
   @override
   Widget build(BuildContext context) {
+    final authBloc = AuthBloc(
+      authRepository: diContainer.repositories.authRepository,
+      secureStorage: diContainer.services.secureStorage,
+    );
+    final router = AppRouter.createRouter(diContainer.debugService, authBloc);
+
     return DependsProviders(
       diContainer: diContainer,
+      authBloc: authBloc,
       child: MaterialApp.router(
         routerConfig: router,
         // --- Localization ---

@@ -2,8 +2,6 @@ import 'package:adaptive_learning_app/app/app_context_ext.dart';
 import 'package:adaptive_learning_app/features/auth/domain/bloc/bloc/auth_bloc.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:go_router/go_router.dart';
-import 'package:provider/provider.dart';
 
 /// {@template register_screen}
 /// Registration screen
@@ -46,65 +44,61 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (context) => AuthBloc(context.di.repositories.authRepository),
-      child: Scaffold(
-        appBar: AppBar(title: Text(context.l10n.registerScreenTitle)),
-        body: BlocConsumer<AuthBloc, AuthState>(
-          listener: (context, state) {
-            if (state is AuthFailure) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Registration Failed: ${state.error}'), backgroundColor: Colors.red),
-              );
-            }
-            if (state is AuthRegisterSuccess) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Registration Successful! Please login.'), backgroundColor: Colors.green),
-              );
-              context.goNamed('login');
-            }
-          },
-          builder: (context, state) {
-            final isLoading = state is AuthLoading;
-
-            return Form(
-              key: _formKey,
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: ListView(
-                  children: [
-                    TextFormField(
-                      controller: _firstNameController,
-                      decoration: InputDecoration(labelText: context.l10n.firstNameLabel),
-                      validator: (value) => (value?.isEmpty ?? true) ? 'Enter first name' : null,
-                    ),
-                    TextFormField(
-                      controller: _lastNameController,
-                      decoration: InputDecoration(labelText: context.l10n.lastNameLabel),
-                      validator: (value) => (value?.isEmpty ?? true) ? 'Enter last name' : null,
-                    ),
-                    TextFormField(
-                      controller: _emailController,
-                      decoration: InputDecoration(labelText: context.l10n.emailLabel),
-                      keyboardType: TextInputType.emailAddress,
-                      validator: (value) => (value?.isEmpty ?? true) ? 'Enter an email' : null,
-                    ),
-                    TextFormField(
-                      controller: _passwordController,
-                      decoration: InputDecoration(labelText: context.l10n.passwordLabel),
-                      obscureText: true,
-                      validator: (value) => (value?.isEmpty ?? true) ? 'Enter a password' : null,
-                    ),
-                    const SizedBox(height: 20),
-                    isLoading
-                        ? const CircularProgressIndicator()
-                        : ElevatedButton(onPressed: _submit, child: Text(context.l10n.registerButton)),
-                  ],
-                ),
-              ),
+    return Scaffold(
+      appBar: AppBar(title: Text(context.l10n.registerScreenTitle)),
+      body: BlocConsumer<AuthBloc, AuthState>(
+        listener: (context, state) {
+          if (state is AuthUnauthenticated && state.error != null) {
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(SnackBar(content: Text('Registration Failed: ${state.error}'), backgroundColor: Colors.red));
+          }
+          if (state is AuthRegisterSuccess) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Registration Successful! Please login.'), backgroundColor: Colors.green),
             );
-          },
-        ),
+          }
+        },
+        builder: (context, state) {
+          final isLoading = state is AuthLoading;
+
+          return Form(
+            key: _formKey,
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: ListView(
+                children: [
+                  TextFormField(
+                    controller: _firstNameController,
+                    decoration: InputDecoration(labelText: context.l10n.firstNameLabel),
+                    validator: (value) => (value?.isEmpty ?? true) ? 'Enter first name' : null,
+                  ),
+                  TextFormField(
+                    controller: _lastNameController,
+                    decoration: InputDecoration(labelText: context.l10n.lastNameLabel),
+                    validator: (value) => (value?.isEmpty ?? true) ? 'Enter last name' : null,
+                  ),
+                  TextFormField(
+                    controller: _emailController,
+                    decoration: InputDecoration(labelText: context.l10n.emailLabel),
+                    keyboardType: TextInputType.emailAddress,
+                    validator: (value) => (value?.isEmpty ?? true) ? 'Enter an email' : null,
+                  ),
+                  TextFormField(
+                    controller: _passwordController,
+                    decoration: InputDecoration(labelText: context.l10n.passwordLabel),
+                    obscureText: true,
+                    validator: (value) => (value?.isEmpty ?? true) ? 'Enter a password' : null,
+                  ),
+                  const SizedBox(height: 20),
+                  isLoading
+                      ? const CircularProgressIndicator()
+                      : ElevatedButton(onPressed: _submit, child: Text(context.l10n.registerButton)),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }

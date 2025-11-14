@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:adaptive_learning_app/features/auth/domain/bloc/bloc/auth_bloc.dart';
 import 'package:adaptive_learning_app/features/auth/presentation/screens/login_screen.dart';
 import 'package:adaptive_learning_app/features/auth/presentation/screens/register_screen.dart';
 import 'package:adaptive_learning_app/features/dashboard/presentation/screens/dashboard_screen.dart';
@@ -13,14 +16,22 @@ import 'package:go_router/go_router.dart';
 /// {@endtemplate}
 class AppRouter {
   static final rootNavigationKey = GlobalKey<NavigatorState>();
-  static const String initialLocation = '/dashboard';
+  static const String initialLocation = '/splash';
 
-  static GoRouter createRouter(IDebugService debugService) {
+  static GoRouter createRouter(IDebugService debugService, AuthBloc authBloc) {
     return GoRouter(
       navigatorKey: rootNavigationKey,
       initialLocation: initialLocation,
       observers: [debugService.routeObserver],
-      // TODO: Redirect logic to check if the user is logged in
+      refreshListenable: GoRouterRefreshStream(authBloc.stream),
+      redirect: (BuildContext context, GoRouterState state) {
+        final authState = authBloc.state;
+        final isAuthRoute = state.matchedLocation == '/login' || state.matchedLocation == '/register';
+        if (authState is AuthUnknown) return state.matchedLocation == '/splash' ? null : '/splash';
+        if (authState is AuthAuthenticated) return isAuthRoute ? '/dashboard' : null;
+        if (authState is AuthUnauthenticated || authState is AuthRegisterSuccess) return isAuthRoute ? null : '/login';
+        return null;
+      },
       routes: [
         // --- Main navigation (with BottomNavigationBar) ---
         StatefulShellRoute.indexedStack(
@@ -46,5 +57,21 @@ class AppRouter {
         GoRoute(path: '/register', name: 'register', builder: (context, state) => const RegisterScreen()),
       ],
     );
+  }
+}
+
+// Helper for converting Stream<AuthState> to Listenable for GoRouter.
+class GoRouterRefreshStream extends ChangeNotifier {
+  GoRouterRefreshStream(Stream<dynamic> stream) {
+    notifyListeners();
+    _subscription = stream.asBroadcastStream().listen((_) => notifyListeners());
+  }
+
+  late final StreamSubscription<dynamic> _subscription;
+
+  @override
+  void dispose() {
+    _subscription.cancel();
+    super.dispose();
   }
 }

@@ -32,7 +32,7 @@ class AppRunner {
 
   final AppEnv env;
   late final IDebugService _debugService;
-  late final GoRouter _router;
+  // late final GoRouter _router;
 
   Future<void> run() async {
     await runZonedGuarded(
@@ -42,10 +42,10 @@ class AppRunner {
         Bloc.observer = _debugService.blocObserver;
         await _initApp();
         _initErrorHandlers(_debugService);
-        _router = AppRouter.createRouter(_debugService);
+        // _router = AppRouter.createRouter(_debugService);
         runApp(
           App(
-            router: _router,
+            // router: _router,
             initDependencies: () => _initDependencies(debugService: _debugService, env: env).timeout(
               _initTimeout,
               onTimeout: () => throw TimeoutException('Dependency initialization timeout exceeded ($_initTimeout)'),
