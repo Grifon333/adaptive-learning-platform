@@ -1,3 +1,5 @@
+import 'package:adaptive_learning_app/features/auth/presentation/screens/login_screen.dart';
+import 'package:adaptive_learning_app/features/auth/presentation/screens/register_screen.dart';
 import 'package:adaptive_learning_app/features/dashboard/presentation/screens/dashboard_screen.dart';
 import 'package:adaptive_learning_app/features/debug/i_debug_service.dart';
 import 'package:adaptive_learning_app/features/profile/presentation/screens/profile_screen.dart';
@@ -40,9 +42,8 @@ class AppRouter {
 
         // --- Separate screens (outside BottomNavigationBar) ---
         GoRoute(path: '/splash', name: 'splash', builder: (context, state) => const SplashScreen()),
-        // TODO
-        // GoRoute(path: '/login', name: 'login', builder: (context, state) => const LoginScreen()),
-        // GoRoute(path: '/register', name: 'register', builder: (context, state) => const RegisterScreen()),
+        GoRoute(path: '/login', name: 'login', builder: (context, state) => const LoginScreen()),
+        GoRoute(path: '/register', name: 'register', builder: (context, state) => const RegisterScreen()),
       ],
     );
   }
