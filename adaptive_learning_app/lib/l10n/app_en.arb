@@ -1,0 +1,13 @@
+{
+  "@@locale": "en",
+  "helloWorld": "Hello World!",
+  "loginScreenTitle": "Login",
+  "registerScreenTitle": "Register",
+  "emailLabel": "Email",
+  "passwordLabel": "Password",
+  "firstNameLabel": "First Name",
+  "lastNameLabel": "Last Name",
+  "loginButton": "Login",
+  "registerButton": "Register",
+  "dontHaveAccount": "Don't have an account? Register"
+}
