@@ -1,6 +1,16 @@
 import uuid
 
-from sqlalchemy import Boolean, Column, DateTime, Enum, ForeignKey, String, func
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    Enum,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    func,
+)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 
@@ -36,6 +46,8 @@ class User(Base):
         cascade="all, delete-orphan",
     )
 
+    learning_paths = relationship("LearningPath", back_populates="student")
+
 
 class StudentProfile(Base):
     __tablename__ = "student_profiles"
@@ -66,3 +78,55 @@ class StudentProfile(Base):
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
     user = relationship("User", back_populates="profile")
+
+
+class LearningPath(Base):
+    __tablename__ = "learning_paths"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    student_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    goal_concepts = Column(JSONB, nullable=False)
+    status = Column(String(50), default="active")  # 'active', 'completed', 'abandoned'
+    estimated_time = Column(Integer, nullable=True)  # Total time, min
+    actual_time = Column(Integer, default=0)
+    completion_percentage = Column(Float, default=0.0)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+    completed_at = Column(DateTime, nullable=True)
+
+    student = relationship("User", back_populates="learning_paths")
+    steps = relationship(
+        "LearningStep",
+        back_populates="path",
+        cascade="all, delete-orphan",
+        order_by="LearningStep.step_number",
+    )
+
+
+class LearningStep(Base):
+    __tablename__ = "learning_steps"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    path_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("learning_paths.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    step_number = Column(Integer, nullable=False)
+    concept_id = Column(String(100), nullable=False)
+    resource_ids = Column(JSONB, nullable=False)  # ["res_uuid_1", "res_uuid_2"]
+    estimated_time = Column(Integer, nullable=True)
+    actual_time = Column(Integer, nullable=True)
+    difficulty = Column(Float, nullable=True)
+    status = Column(
+        String(50), default="pending"
+    )  # 'pending', 'in_progress', 'completed'
+    score = Column(Float, nullable=True)  # Test/quiz score
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+
+    path = relationship("LearningPath", back_populates="steps")

@@ -69,6 +69,10 @@ services:
       - ACCESS_TOKEN_EXPIRE_MINUTES=${USER_SERVICE_ACCESS_TOKEN_EXPIRE_MINUTES}
       - REFRESH_TOKEN_EXPIRE_MINUTES=${USER_SERVICE_REFRESH_TOKEN_EXPIRE_MINUTES}
       - LOG_LEVEL=INFO
+    volumes:
+      - ./backend/services/user_service/src:/app/src
+      - ./backend/services/user_service/migrations:/app/migrations
+      - ./backend/services/user_service/alembic.ini:/app/alembic.ini
     depends_on:
       - postgres
     networks:
