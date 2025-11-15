@@ -1,5 +1,5 @@
 import 'package:adaptive_learning_app/di/di_container.dart';
-import 'package:adaptive_learning_app/features/auth/domain/bloc/bloc/auth_bloc.dart';
+import 'package:adaptive_learning_app/features/auth/domain/bloc/auth_bloc.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:provider/provider.dart';

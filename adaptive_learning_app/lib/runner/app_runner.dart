@@ -6,11 +6,9 @@ import 'package:adaptive_learning_app/app/app_env.dart';
 import 'package:adaptive_learning_app/di/di_container.dart';
 import 'package:adaptive_learning_app/features/debug/debug_service.dart';
 import 'package:adaptive_learning_app/features/debug/i_debug_service.dart';
-import 'package:adaptive_learning_app/router/app_router.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:go_router/go_router.dart';
 
 part 'errors_handlers.dart';
 
@@ -32,7 +30,6 @@ class AppRunner {
 
   final AppEnv env;
   late final IDebugService _debugService;
-  // late final GoRouter _router;
 
   Future<void> run() async {
     await runZonedGuarded(
@@ -42,10 +39,8 @@ class AppRunner {
         Bloc.observer = _debugService.blocObserver;
         await _initApp();
         _initErrorHandlers(_debugService);
-        // _router = AppRouter.createRouter(_debugService);
         runApp(
           App(
-            // router: _router,
             initDependencies: () => _initDependencies(debugService: _debugService, env: env).timeout(
               _initTimeout,
               onTimeout: () => throw TimeoutException('Dependency initialization timeout exceeded ($_initTimeout)'),

@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:adaptive_learning_app/features/auth/domain/bloc/bloc/auth_bloc.dart';
+import 'package:adaptive_learning_app/features/auth/domain/bloc/auth_bloc.dart';
 import 'package:adaptive_learning_app/features/auth/presentation/screens/login_screen.dart';
 import 'package:adaptive_learning_app/features/auth/presentation/screens/register_screen.dart';
 import 'package:adaptive_learning_app/features/dashboard/presentation/screens/dashboard_screen.dart';
@@ -29,7 +29,7 @@ class AppRouter {
         final location = state.matchedLocation;
         final isAuthRoute = location == '/login' || location == '/register';
         if (authState is AuthUnknown) return location == '/splash' ? null : '/splash';
-        if (authState is AuthAuthenticated) return isAuthRoute ? '/dashboard' : null;
+        if (authState is AuthAuthenticated) return (isAuthRoute || location == '/splash') ? '/dashboard' : null;
         if (authState is AuthUnauthenticated) return isAuthRoute ? null : '/login';
         return null;
       },

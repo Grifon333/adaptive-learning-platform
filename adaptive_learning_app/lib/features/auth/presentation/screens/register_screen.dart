@@ -1,5 +1,5 @@
 import 'package:adaptive_learning_app/app/app_context_ext.dart';
-import 'package:adaptive_learning_app/features/auth/domain/bloc/bloc/auth_bloc.dart';
+import 'package:adaptive_learning_app/features/auth/domain/bloc/auth_bloc.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
