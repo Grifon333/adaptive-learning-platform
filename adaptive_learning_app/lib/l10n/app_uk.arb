@@ -1,0 +1,13 @@
+{
+  "@@locale": "uk",
+  "helloWorld": "Привіт, Світ!",
+  "loginScreenTitle": "Вхід",
+  "registerScreenTitle": "Реєстрація",
+  "emailLabel": "Електронна пошта",
+  "passwordLabel": "Пароль",
+  "firstNameLabel": "Ім'я",
+  "lastNameLabel": "Прізвище",
+  "loginButton": "Увійти",
+  "registerButton": "Зареєструватися",
+  "dontHaveAccount": "Немає акаунту? Зареєструватися"
+}

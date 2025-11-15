@@ -1,0 +1,86 @@
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  exclude:
+    - "android/**"
+    - "assets/**"
+    - "build/**"
+    - "config/**"
+    - "core/**"
+    - "res/**"
+    - "ios/**"
+    - "**/*.g.dart"
+    - "**/*.config.dart"
+    - "**/*.gen.dart"
+    - "**/*.freezed.dart"
+    - "**/generated/*"
+    - "**/*.gr.dart"
+    - "**/*.yaml"
+    - "app_services/aurora/**"
+    - "/app_services/aurora/**"
+    - "**/app_services/aurora/**"
+    - "**/*.lock.dart"
+
+errors:
+  # Error level overrides (error/warning/info)
+  avoid_dynamic_calls: error # Disables the use of dynamic for method calls
+  avoid_returning_null_for_future: error # Disables returning null instead of Future
+  avoid_slow_async_io: warning # Warns about slow asynchronous I/O operations
+  avoid_type_to_string: warning # Warns about incorrect use of toString() for types
+  cancel_subscriptions: error # Requires canceling subscriptions, prevents memory leaks
+  close_sinks: error # Requires closing sinks, prevents resource leaks
+  comment_references: warning # Checks for correct references in comments
+  always_declare_return_types: error # Requires explicitly specifying return types for methods
+  always_require_non_null_named_parameters: warning # Requires using @required for non-null parameters
+  avoid_bool_literals_in_conditional_expressions: warning # Disallows redundant boolean literals in conditional expressions
+  avoid_return_types_on_setters: warning # Disallows return types for setters
+  avoid_returning_null: error # Disallows returning null
+  avoid_setters_without_getters: error # Requires creating a getter if a setter is present
+  avoid_void_async: error # Disallows using void for asynchronous functions
+  constant_identifier_names: error # Checks for correct constant naming
+  unnecessary_new: warning # Disallows redundant use of the new keyword
+  use_decorated_box: warning # Recommends using DecoratedBox instead of Container
+  use_colored_box: warning # Recommends using ColoredBox instead of Container with color
+
+linter:
+  rules:
+    # Non-standard rules or rules with modified values
+    always_put_required_named_parameters_first: true # Require mandatory named parameters to be put first
+    avoid_catches_without_on_clauses: true # Avoid catch without specifying the exception type
+    avoid_catching_errors: true # Avoid catching errors of type Error
+    avoid_equals_and_hash_code_on_mutable_classes: true # Avoid equals and hashCode in mutable classes
+    avoid_escaping_inner_quotes: true # Avoid escaping inner quotes
+    avoid_field_initializers_in_const_classes: true # Avoid field initializers in const classes
+    avoid_implementing_value_types: true # Avoid implementing value type interfaces
+    avoid_multiple_declarations_per_line: false # Allow multiple declarations on a single line
+    avoid_positional_boolean_parameters: true # Avoid positional boolean parameters
+    avoid_private_typedef_functions: true # Avoid private typedef functions
+    avoid_redundant_argument_values: true # Avoid redundant argument values
+    avoid_returning_this: true # Avoid returning this
+    cascade_invocations: true # Use cascading invocations
+    deprecated_consistency: true # Maintain consistency of deprecated members
+    do_not_use_environment: false # Allow use of Environment
+    leading_newlines_in_multiline_strings: true # Start multiline strings on a new line
+    no_runtimeType_toString: true # Don't use runtimeType.toString()
+    one_member_abstracts: false # Allow abstract classes with one method
+    only_throw_errors: true # Throw only Error objects
+    parameter_assignments: true # Disallow assignment parameter values
+    prefer_asserts_with_message: true # Use messages with assert
+    prefer_constructors_over_static_methods: true # Prefer constructors over static methods
+    prefer_final_in_for_each: true # Use final in for-each loops
+    prefer_final_locals: true # Use final for local variables
+    public_member_api_docs: false # Do not require documentation for all public members
+    require_trailing_commas: true # Require trailing commas for better formatting
+    sort_constructors_first: true # Require constructors to be placed first
+    sort_pub_dependencies: false # Do not require sorting of dependencies in pubspec
+    sort_unnamed_constructors_first: false # Do not require unnamed constructors to be placed first
+    use_is_even_rather_than_modulo: true # Use isEven instead of %2 == 0
+    use_late_for_private_fields_and_variables: false # Don't require late for private fields
+    use_setters_to_change_properties: true # Use setters to change properties
+    use_string_buffers: true # Use StringBuffer for complex concatenation
+    use_to_and_as_if_applicable: true # Use to and as methods when applicable
+    no_literal_bool_comparisons: true # Disable comparisons with true/false literals
+    use_key_in_widget_constructors: true # Require key specification for stateful/stateless widgets
+    always_use_package_imports: true # Always use package: imports
+    unawaited_futures: true # Require use of unawaited for unawaited Futures
+    comment_references: true # Use only visible parameters in documentation
