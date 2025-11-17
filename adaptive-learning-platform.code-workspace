@@ -1,0 +1,17 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "backend/services/user_service"
+		},
+		{
+			"path": "backend/services/knowledge_graph_service"
+		},
+		{
+			"path": "backend/services/learning_path_service"
+		}
+	],
+	"settings": {}
+}
