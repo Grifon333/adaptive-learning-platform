@@ -71,7 +71,7 @@ jobs:
         ports:
           - 7687:7687 # Bolt port
         options: >-
-          --health-cmd "cypher-shell 'RETURN 1'"
+          --health-cmd "cypher-shell -u neo4j -p password123 'RETURN 1'"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 10
