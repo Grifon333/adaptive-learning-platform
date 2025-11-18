@@ -44,6 +44,9 @@ ignore = [
     "E402", # Module level import not at top of file
 ]
 
+[tool.ruff.lint.isort]
+known-first-party = ["src"]
+
 [tool.ruff.format]
 quote-style = "double"
 
