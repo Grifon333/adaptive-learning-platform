@@ -129,6 +129,22 @@ services:
     networks:
       - adaptive_network
 
+  event_service:
+    build:
+      context: ./backend/services/event_service
+    container_name: alp_event_service
+    ports:
+      - "8003:8000"
+    environment:
+      - MONGODB_URL=mongodb://mongodb:27017
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./backend/services/event_service/src:/app/src
+    depends_on:
+      - mongodb
+    networks:
+      - adaptive_network
+
 # Томи для збереження даних
 volumes:
   postgres_data:
