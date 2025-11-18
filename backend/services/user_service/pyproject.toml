@@ -48,6 +48,9 @@ ignore = [
     "E402",
 ]
 
+[tool.ruff.lint.isort]
+known-first-party = ["src"]
+
 [tool.ruff.format]
 quote-style = "double"
 
