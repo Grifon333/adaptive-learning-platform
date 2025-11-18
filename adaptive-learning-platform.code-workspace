@@ -11,6 +11,9 @@
 		},
 		{
 			"path": "backend/services/learning_path_service"
+		},
+		{
+			"path": "backend/services/event_service"
 		}
 	],
 	"settings": {}
