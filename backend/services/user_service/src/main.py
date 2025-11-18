@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+from typing import cast
 
 from fastapi import Depends, FastAPI, HTTPException, status
 from loguru import logger
@@ -59,7 +60,7 @@ def get_current_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found",
         )
-    return user
+    return cast(models.User, user)
 
 
 @app.post("/api/v1/auth/register", status_code=status.HTTP_201_CREATED)
@@ -186,3 +187,54 @@ def update_user_profile(
     db.commit()
     db.refresh(profile)
     return profile
+
+
+@app.post(
+    "/api/v1/learning-paths",
+    response_model=schemas.LearningPath,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_learning_path(
+    path_data: schemas.LearningPathCreate,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Creates a new learning path for the currently authenticated student.
+    """
+    logger.info(f"Creating learning path for user {current_user.email}")
+
+    # 1. Creating the main LearningPath record
+    db_path = models.LearningPath(
+        student_id=current_user.id,
+        goal_concepts=path_data.goal_concepts,
+        estimated_time=path_data.estimated_time,
+    )
+    db.add(db_path)
+
+    # 2. Creating steps (LearningStep)
+    db_steps = []
+    for step_data in path_data.steps:
+        db_step = models.LearningStep(
+            path=db_path,
+            step_number=step_data.step_number,
+            concept_id=step_data.concept_id,
+            resource_ids=step_data.resource_ids,
+            estimated_time=step_data.estimated_time,
+            difficulty=step_data.difficulty,
+        )
+        db_steps.append(db_step)
+    db.add_all(db_steps)
+
+    try:
+        db.commit()
+        db.refresh(db_path)
+        logger.success(f"Learning path {db_path.id} created successfully.")
+        return db_path
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to create learning path: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create learning path",
+        ) from e

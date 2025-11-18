@@ -33,9 +33,10 @@ services:
       - neo4j_data:/data
     healthcheck:
       test: ["CMD-SHELL", "cypher-shell -u ${NEO4J_USER} -p ${NEO4J_PASSWORD} 'RETURN 1'"]
-      interval: 5s
-      timeout: 5s
+      interval: 10s
+      timeout: 10s
       retries: 5
+      start_period: 20s
     networks:
       - adaptive_network
 

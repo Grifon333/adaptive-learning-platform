@@ -48,6 +48,9 @@ ignore = [
     "E402",
 ]
 
+[tool.ruff.lint.isort]
+known-first-party = ["src"]
+
 [tool.ruff.format]
 quote-style = "double"
 
@@ -56,4 +59,4 @@ python_version = "3.11"
 warn_return_any = true
 warn_unused_configs = true
 ignore_missing_imports = true
-mypy_path = "src"
+mypy_path = "backend/services/user_service/src"

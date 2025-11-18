@@ -6,15 +6,49 @@ authors = [
     {name = "Fantom",email = "daniil.king333@gmail.com"}
 ]
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<4.0"
 dependencies = [
     "fastapi (>=0.121.0,<0.122.0)",
     "uvicorn (>=0.38.0,<0.39.0)",
-    "pydantic (>=2.12.4,<3.0.0)",
-    "python-dotenv (>=1.2.1,<2.0.0)"
+    "pydantic[email] (>=2.12.4,<3.0.0)",
+    "python-dotenv (>=1.2.1,<2.0.0)",
+    "pydantic-settings (>=2.12.0,<3.0.0)",
+    "loguru (>=0.7.3,<0.8.0)",
+    "httpx (>=0.28.1,<0.29.0)"
 ]
 
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
+
+[dependency-groups]
+dev = [
+    "pre-commit (>=4.4.0,<5.0.0)",
+    "ruff (>=0.14.5,<0.15.0)",
+    "mypy (>=1.18.2,<2.0.0)"
+]
+
+[tool.ruff]
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "C90", "N", "UP", "B"]
+ignore = [
+    "E501", # Line too long (handled by ruff format)
+    "B008", # Do not perform function calls in argument defaults
+    "E402", # Module level import not at top of file
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["src"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+mypy_path = "backend/services/learning_path_service/src"
