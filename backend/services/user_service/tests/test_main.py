@@ -1,6 +1,5 @@
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
-
 from src import models
 from src.models import User
 from src.security import get_password_hash
@@ -99,7 +98,7 @@ def login_user(client: TestClient) -> str:
     }
     response = client.post("/api/v1/auth/login", json=login_data)
     assert response.status_code == 200
-    return response.json()["access_token"]
+    return str(response.json()["access_token"])
 
 
 def test_get_user_profile_success(client: TestClient, db_session: Session):

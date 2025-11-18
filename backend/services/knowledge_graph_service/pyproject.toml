@@ -52,4 +52,4 @@ python_version = "3.11"
 warn_return_any = true
 warn_unused_configs = true
 ignore_missing_imports = true
-mypy_path = "src"
+mypy_path = "backend/services/knowledge_graph_service/src"
