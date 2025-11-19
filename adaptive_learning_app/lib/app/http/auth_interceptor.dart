@@ -1,3 +1,4 @@
+import 'package:adaptive_learning_app/features/auth/data/dto/auth_dtos.dart';
 import 'package:adaptive_learning_app/features/debug/i_debug_service.dart';
 import 'package:dio/dio.dart';
 import 'package:i_app_services/i_app_services.dart';
@@ -21,11 +22,7 @@ class AuthInterceptor extends QueuedInterceptor {
   final ISecureStorage _secureStorage;
   final IDebugService _debugService;
 
-  static const _publicRoutes = {
-    '/auth/login',
-    '/auth/register',
-    // TODO: add '/auth/refresh'
-  };
+  static const _publicRoutes = {'/auth/login', '/auth/register', '/auth/refresh'};
 
   @override
   Future<void> onRequest(RequestOptions options, RequestInterceptorHandler handler) async {
@@ -41,25 +38,55 @@ class AuthInterceptor extends QueuedInterceptor {
   }
 
   @override
-  void onError(DioException err, ErrorInterceptorHandler handler) {
+  Future<void> onError(DioException err, ErrorInterceptorHandler handler) async {
     _debugService.logError('AuthInterceptor: Request error', error: err);
     if (err.response?.statusCode == 401) {
-      if (err.requestOptions.path != '/auth/login') {
-        _debugService.logWarning('AuthInterceptor: Received 401. Refreshing token...');
+      final isRefreshPath = err.requestOptions.path.contains('/auth/refresh');
+      if (!isRefreshPath) {
+        _debugService.logWarning('AuthInterceptor: Received 401. Attempting token refresh...');
 
-        // TODO: Implement token refresh logic
-        // 1. Get refresh token from _secureStorage
-        // 2. Make a request to POST /api/v1/auth/refresh
-        // 3. If successful:
-        //    - Save new access and refresh tokens
-        //    - Update the ‘Authorization’ header in err.requestOptions
-        //    - Repeat the request: return handler.resolve(await _httpClient.fetch(err.requestOptions));
-        // 4. If unsuccessful:
-        //    - Delete tokens
-        //    - “Fail” the request: return handler.next(err);
+        // 1. Get refresh token
+        final refreshToken = await _secureStorage.read(SecureStorageKeys.refreshToken);
+        if (refreshToken == null) {
+          _debugService.logError('AuthInterceptor: No refresh token found. Redirecting to login.');
+          return handler.next(err);
+        }
 
-        // For now, we just “fail” the request
-        _debugService.logError('AuthInterceptor: Token refresh logic not implemented.');
+        // 2. Execure update request
+        try {
+          final dio = Dio(
+            BaseOptions(
+              baseUrl: _httpClient.options.baseUrl,
+              connectTimeout: _httpClient.options.connectTimeout,
+              sendTimeout: _httpClient.options.sendTimeout,
+              receiveTimeout: _httpClient.options.receiveTimeout,
+            ),
+          );
+
+          final refreshResponse = await dio.post(
+            '${_httpClient.options.baseUrl}/api/v1/auth/refresh',
+            data: {'refresh_token': refreshToken},
+          );
+          final newTokens = TokenResponse.fromJson(refreshResponse.data);
+
+          // 3. Storage new tokens
+          await _secureStorage.write(SecureStorageKeys.accessToken, newTokens.accessToken);
+          await _secureStorage.write(SecureStorageKeys.refreshToken, newTokens.refreshToken);
+          _debugService.log('AuthInterceptor: Tokens successfully refreshed.');
+
+          // 4. Repaet original request
+          final originalRequest = err.requestOptions;
+          originalRequest.headers['Authorization'] = 'Bearer ${newTokens.accessToken}';
+          final response = await _httpClient.fetch(originalRequest);
+          return handler.resolve(response);
+        } on DioException catch (e) {
+          // If the update fails (e.g., invalid refresh token), clear the cache
+          _debugService.logError('AuthInterceptor: Token refresh failed.', error: e);
+          await _secureStorage.delete(SecureStorageKeys.accessToken);
+          await _secureStorage.delete(SecureStorageKeys.refreshToken);
+          // Allow 401 to pass for AuthBloc logout call
+          return handler.next(err);
+        }
       }
       return handler.next(err);
     }

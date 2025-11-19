@@ -79,3 +79,7 @@ class LearningPath(BaseModel):
     status: str
     completion_percentage: float
     steps: list[LearningStep]
+
+
+class TokenRefresh(BaseModel):
+    refresh_token: str
