@@ -5,6 +5,9 @@ import 'package:adaptive_learning_app/features/auth/presentation/screens/login_s
 import 'package:adaptive_learning_app/features/auth/presentation/screens/register_screen.dart';
 import 'package:adaptive_learning_app/features/dashboard/presentation/screens/dashboard_screen.dart';
 import 'package:adaptive_learning_app/features/debug/i_debug_service.dart';
+import 'package:adaptive_learning_app/features/learning_path/presentation/screens/goal_selection_screen.dart';
+import 'package:adaptive_learning_app/features/learning_path/presentation/screens/learning_path_screen.dart';
+import 'package:adaptive_learning_app/features/learning_path/presentation/screens/lesson_screen.dart';
 import 'package:adaptive_learning_app/features/profile/presentation/screens/profile_screen.dart';
 import 'package:adaptive_learning_app/features/root/root_screen.dart';
 import 'package:adaptive_learning_app/features/splash/splash_screen.dart';
@@ -42,7 +45,11 @@ class AppRouter {
             // 1. Dashboard
             StatefulShellBranch(
               routes: [
-                GoRoute(path: '/dashboard', name: 'dashboard', builder: (context, state) => const DashboardScreen()),
+                GoRoute(
+                  path: '/dashboard',
+                  name: 'dashboard',
+                  builder: (context, state) => const GoalSelectionScreen(),
+                ),
               ],
             ),
             // 2. Profile
@@ -56,6 +63,17 @@ class AppRouter {
         GoRoute(path: '/splash', name: 'splash', builder: (context, state) => const SplashScreen()),
         GoRoute(path: '/login', name: 'login', builder: (context, state) => const LoginScreen()),
         GoRoute(path: '/register', name: 'register', builder: (context, state) => const RegisterScreen()),
+
+        GoRoute(path: '/learning-path', name: 'learning-path', builder: (context, state) => const LearningPathScreen()),
+        GoRoute(
+          path: '/lesson/:stepId',
+          name: 'lesson',
+          builder: (context, state) {
+            final stepId = state.pathParameters['stepId']!;
+            final conceptId = state.uri.queryParameters['conceptId']!;
+            return LessonScreen(stepId: stepId, conceptId: conceptId);
+          },
+        ),
       ],
     );
   }

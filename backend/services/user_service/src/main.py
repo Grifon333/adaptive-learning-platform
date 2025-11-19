@@ -238,3 +238,39 @@ def create_learning_path(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to create learning path",
         ) from e
+
+
+@app.post("api/v1/auth/refresh", response_model=schemas.Token)
+def refresh_access_token(
+    refresh_request: schemas.TokenRefresh, db: Session = Depends(get_db)
+):
+    """
+    Update the Access Token, using the Refresh Token
+    """
+    token_data = security.decode_access_token(refresh_request.refresh_token)
+    if token_data.token_type != "refresh":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token type, expected 'refresh'",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # Check user existing
+    user = db.query(models.User).filter(models.User.id == token_data.user_id).first()
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid refresh token signature or user not found",
+        )
+
+    # Generate a new pair of tokens
+    subject_data = {"sub": str(user.id)}
+    new_access_token = security.create_access_token(data=subject_data)
+    new_refresh_token = security.create_refresh_token(data=subject_data)
+
+    logger.info(f"Token refreshed for user: {user.email}")
+    return {
+        "access_token": new_access_token,
+        "refresh_token": new_refresh_token,
+        "token_type": "bearer",
+    }
