@@ -1,5 +1,27 @@
 from pydantic import BaseModel, Field
 
+# --- Resource Schemas ---
+
+
+class ResourceBase(BaseModel):
+    title: str
+    type: str = Field(..., description="video, article, quiz, etc.")
+    url: str
+    duration: int = Field(default=0, description="Duration in minutes")
+
+
+class ResourceCreate(ResourceBase):
+    pass
+
+
+class Resource(ResourceBase):
+    id: str
+
+    model_config = {"from_attributes": True}
+
+
+# --- Concept Schemas ---
+
 
 class ConceptBase(BaseModel):
     name: str
@@ -13,17 +35,26 @@ class ConceptCreate(ConceptBase):
 
 
 class Concept(ConceptBase):
-    id: str  # unique UUID
+    id: str
+    resources: list[Resource] = []
 
     model_config = {
         "from_attributes": True  # Allows mapping from objects (e.g., Neo4j nodes)
     }
 
 
+# --- Relationship & Path Schemas ---
+
+
 class RelationshipCreate(BaseModel):
     start_concept_id: str
     end_concept_id: str
     rel_type: str = Field(default="PREREQUISITE", alias="type")
+
+
+class ResourceLink(BaseModel):
+    concept_id: str
+    resource_id: str
 
 
 class PathResponse(BaseModel):

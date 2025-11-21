@@ -4,7 +4,6 @@ from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI, HTTPException, status
 from loguru import logger
 from neo4j import AsyncSession
-from neo4j.exceptions import Neo4jError
 
 from . import schemas
 from .database import close_driver, get_db_session, init_driver
@@ -24,6 +23,9 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Knowledge Graph Service", lifespan=lifespan)
+
+
+# --- Concept Endpoints ---
 
 
 @app.post(
@@ -62,19 +64,14 @@ async def create_concept(
         record = await result.single()
 
         if record is None:
-            logger.error("Failed to create concept node in Neo4j.")
             raise HTTPException(status_code=500, detail="Could not create concept")
 
         node = record[0]
-        node_properties = dict(node)
-        logger.success(f"Concept created with ID: {concept_id}")
-        return schemas.Concept(**node_properties)
+        # Повертаємо пустий список ресурсів для нової концепції
+        return schemas.Concept(**dict(node), resources=[])
 
-    except Neo4jError as e:
-        logger.error(f"Neo4j error creating concept: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
     except Exception as e:
-        logger.error(f"Unexpected error creating concept: {e}")
+        logger.error(f"Error creating concept: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
@@ -85,26 +82,107 @@ async def get_concept_details(
     """
     Retrieves concept details by its 'id'
     """
-    query = "MATCH (c:Concept {id: $id}) RETURN c"
+    query = (
+        "MATCH (c:Concept {id: $id}) "
+        "OPTIONAL MATCH (c)-[:HAS_RESOURCE]->(r:Resource) "
+        "RETURN c, collect(r) as resources"
+    )
 
     try:
         result = await db.run(query, {"id": concept_id})
         record = await result.single()
 
         if record is None:
-            logger.warning(f"Concept with ID {concept_id} not found")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Concept not found",
             )
 
-        node = record[0]
-        node_properties = dict(node)
-        return schemas.Concept(**node_properties)
+        concept_node = record["c"]
+        resource_nodes = record["resources"]
 
-    except Neo4jError as e:
-        logger.error(f"Neo4j error getting concept: {e}")
+        resources_data = [schemas.Resource(**dict(r)) for r in resource_nodes if r]
+
+        return schemas.Concept(**dict(concept_node), resources=resources_data)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting concept: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+# --- Resource Endpoints (NEW) ---
+
+
+@app.post(
+    "/api/v1/resources",
+    response_model=schemas.Resource,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_resource(
+    resource: schemas.ResourceCreate, db: AsyncSession = Depends(get_db_session)
+):
+    """
+    Creates a new learning resource node.
+    """
+    res_id = str(uuid.uuid4())
+    query = (
+        "CREATE (r:Resource { "
+        "id: $id, "
+        "title: $title, "
+        "type: $type, "
+        "url: $url, "
+        "duration: $duration "
+        "}) RETURN r"
+    )
+
+    try:
+        result = await db.run(
+            query,
+            {
+                "id": res_id,
+                "title": resource.title,
+                "type": resource.type,
+                "url": resource.url,
+                "duration": resource.duration,
+            },
+        )
+        record = await result.single()
+        if not record:
+            raise HTTPException(status_code=500, detail="Failed to create resource")
+
+        return schemas.Resource(**dict(record["r"]))
+    except Exception as e:
+        logger.error(f"Error creating resource: {e}")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@app.post("/api/v1/concepts/{concept_id}/resources", status_code=status.HTTP_200_OK)
+async def add_resource_to_concept(
+    concept_id: str, resource_id: str, db: AsyncSession = Depends(get_db_session)
+):
+    """
+    Links an existing resource to a concept via HAS_RESOURCE relationship.
+    """
+    query = (
+        "MATCH (c:Concept {id: $cid}), (r:Resource {id: $rid}) "
+        "MERGE (c)-[:HAS_RESOURCE]->(r) "
+        "RETURN c, r"
+    )
+    try:
+        result = await db.run(query, {"cid": concept_id, "rid": resource_id})
+        record = await result.single()
+        if not record:
+            raise HTTPException(status_code=404, detail="Concept or Resource not found")
+
+        return {"message": "Resource linked successfully"}
+    except Exception as e:
+        logger.error(f"Error linking resource: {e}")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+# --- Relationship & Path Endpoints ---
 
 
 @app.post("/api/v1/relationships", status_code=status.HTTP_201_CREATED)
@@ -131,21 +209,15 @@ async def create_relationship(
         record = await result.single()
 
         if record is None:
-            logger.error(
-                "Could not create relationship. One or both concepts not found."
-            )
             raise HTTPException(
                 status_code=404, detail="One or both concepts not found"
             )
 
-        rel_type = record["rel_type"]
-        logger.success(
-            f"Created relationship '{rel_type}' from {rel.start_concept_id} to {rel.end_concept_id}"
-        )
-        return {"status": "created", "type": rel_type}
-
-    except Neo4jError as e:
-        logger.error(f"Neo4j error creating relationship: {e}")
+        return {"status": "created", "type": record["rel_type"]}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating relationship: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
@@ -154,27 +226,44 @@ async def get_shortest_path(
     start_id: str, end_id: str, db: AsyncSession = Depends(get_db_session)
 ):
     """
-    Finds the shortest prerequisite path between two concepts.
+    Finds path and returns concepts populated with their resources.
     """
+    # 1. Find the path (nodes)
+    # 2. UNWIND the list of nodes to process each one individually
+    # 3. For each node (Concept), we search for associated resources
+    # 4. Collect everything back into a list
     query = (
         "MATCH (start:Concept {id: $start_id}), (end:Concept {id: $end_id}), "
         "p = shortestPath((start)-[:PREREQUISITE*]->(end)) "
-        "RETURN nodes(p) AS path_nodes"
+        "WITH nodes(p) AS path_nodes "
+        "UNWIND path_nodes AS c "
+        "OPTIONAL MATCH (c)-[:HAS_RESOURCE]->(r:Resource) "
+        "RETURN c, collect(r) as resources"
     )
+
     try:
         result = await db.run(query, {"start_id": start_id, "end_id": end_id})
-        record = await result.single()
+        records = [record async for record in result]
 
-        if record is None or record["path_nodes"] is None:
-            logger.warning(f"No prerequisite path found from {start_id} to {end_id}")
+        if not records:
+            logger.warning(f"No path found from {start_id} to {end_id}")
             return schemas.PathResponse(path=[])
 
-        # Convert the list of nodes into a list of Pydantic models
-        path_nodes = [schemas.Concept(**dict(node)) for node in record["path_nodes"]]
+        path_concepts = []
+        for record in records:
+            c_node = record["c"]
+            r_nodes = record["resources"]
 
-        return schemas.PathResponse(path=path_nodes)
+            # Converting resources into Pydantic models
+            resources_list = [schemas.Resource(**dict(r)) for r in r_nodes if r]
 
-    except Neo4jError as e:
+            # Creating concept with resources
+            concept_obj = schemas.Concept(**dict(c_node), resources=resources_list)
+            path_concepts.append(concept_obj)
+
+        return schemas.PathResponse(path=path_concepts)
+
+    except Exception as e:
         logger.error(f"Neo4j error finding path: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
