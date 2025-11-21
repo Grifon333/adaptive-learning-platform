@@ -102,11 +102,13 @@ async def create_learning_path(
     us_steps = []
     total_time = 0
     for i, concept in enumerate(kgs_data.path):
+        resources_payload = [res.model_dump() for res in concept.resources]
+
         us_steps.append(
             schemas.USLearningStepCreate(
                 step_number=i + 1,
                 concept_id=concept.id,
-                resource_ids=["fake-res-1", "fake-res-2"],  # TODO: Get real resources
+                resources=resources_payload,
                 estimated_time=concept.estimated_time,
                 difficulty=concept.difficulty,
             )

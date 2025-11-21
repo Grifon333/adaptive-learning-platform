@@ -43,10 +43,18 @@ class StudentProfileUpdate(BaseModel):
     timezone: str | None = None
 
 
+class ResourceData(BaseModel):
+    id: str
+    title: str
+    type: str
+    url: str
+    duration: int
+
+
 class LearningStepCreate(BaseModel):
     step_number: int
     concept_id: str
-    resource_ids: list[str]
+    resources: list[dict[str, Any]]
     estimated_time: int | None = None
     difficulty: float | None = None
 
@@ -63,7 +71,7 @@ class LearningStep(BaseModel):
     id: uuid.UUID
     step_number: int
     concept_id: str
-    resource_ids: list[str]
+    resources: list[dict[str, Any]]
     status: str
     score: float | None = None
     estimated_time: int | None = None
