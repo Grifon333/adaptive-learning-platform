@@ -15,33 +15,12 @@ class LessonScreen extends StatefulWidget {
 }
 
 class _LessonScreenState extends State<LessonScreen> {
-  bool _isSubmitting = false;
-
-  Future<void> _completeLesson() async {
-    setState(() => _isSubmitting = true);
-    try {
-      final eventRepository = context.read<DiContainer>().repositories.eventRepository;
-      await eventRepository.sendEvent(
-        eventType: 'STEP_COMPLETE',
-        metadata: {
-          'step_id': widget.step.id,
-          'concept_id': widget.step.conceptId,
-          'resources_count': widget.step.resources.length,
-        },
-      );
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Step completed!'), backgroundColor: Colors.green));
-        context.pop();
-      }
-    } on Object catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
-      }
-    } finally {
-      if (mounted) setState(() => _isSubmitting = false);
-    }
+  Future<void> _takeQuiz() async {
+    final result = await context.pushNamed(
+      'quiz',
+      extra: {'stepId': widget.step.id, 'conceptId': widget.step.conceptId},
+    );
+    if (result == true && mounted) context.pop();
   }
 
   Future<void> _launchURL(String urlString) async {
@@ -84,11 +63,9 @@ class _LessonScreenState extends State<LessonScreen> {
             ),
             const SizedBox(height: 20),
             ElevatedButton.icon(
-              onPressed: _isSubmitting ? null : _completeLesson,
-              icon: _isSubmitting ? const SizedBox.shrink() : const Icon(Icons.check_circle_outline),
-              label: _isSubmitting
-                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Text('Mark Step as Completed'),
+              onPressed: _takeQuiz,
+              icon: const Icon(Icons.quiz),
+              label: const Text('Take a knowledge test'),
               style: ElevatedButton.styleFrom(padding: const EdgeInsets.all(16)),
             ),
           ],
