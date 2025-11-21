@@ -3,8 +3,8 @@ import 'dart:async';
 import 'package:adaptive_learning_app/features/auth/domain/bloc/auth_bloc.dart';
 import 'package:adaptive_learning_app/features/auth/presentation/screens/login_screen.dart';
 import 'package:adaptive_learning_app/features/auth/presentation/screens/register_screen.dart';
-import 'package:adaptive_learning_app/features/dashboard/presentation/screens/dashboard_screen.dart';
 import 'package:adaptive_learning_app/features/debug/i_debug_service.dart';
+import 'package:adaptive_learning_app/features/learning_path/data/dto/learning_path_dtos.dart';
 import 'package:adaptive_learning_app/features/learning_path/presentation/screens/goal_selection_screen.dart';
 import 'package:adaptive_learning_app/features/learning_path/presentation/screens/learning_path_screen.dart';
 import 'package:adaptive_learning_app/features/learning_path/presentation/screens/lesson_screen.dart';
@@ -66,12 +66,11 @@ class AppRouter {
 
         GoRoute(path: '/learning-path', name: 'learning-path', builder: (context, state) => const LearningPathScreen()),
         GoRoute(
-          path: '/lesson/:stepId',
+          path: '/lesson',
           name: 'lesson',
           builder: (context, state) {
-            final stepId = state.pathParameters['stepId']!;
-            final conceptId = state.uri.queryParameters['conceptId']!;
-            return LessonScreen(stepId: stepId, conceptId: conceptId);
+            final step = state.extra as LearningStepDto;
+            return LessonScreen(step: step);
           },
         ),
       ],

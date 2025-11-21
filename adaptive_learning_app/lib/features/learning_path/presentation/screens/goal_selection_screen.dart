@@ -7,8 +7,8 @@ class GoalSelectionScreen extends StatelessWidget {
   const GoalSelectionScreen({super.key});
 
   // Hardcoded IDs for demonstration purposes
-  final String startNodeId = "ab442026-08d0-4e18-b36a-e685fa3f92e5"; // A
-  final String endNodeId = "0a5d2692-2c6b-41dc-838f-ef594a40cd66"; // C
+  final String startNodeId = "ff9eecf7-81fc-489d-9e8e-2f6360595f02"; // A
+  final String endNodeId = "de53b2dd-b583-4d9c-a190-65e83b26c2b6"; // C
 
   @override
   Widget build(BuildContext context) {
