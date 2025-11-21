@@ -43,13 +43,7 @@ class LearningPathScreen extends StatelessWidget {
                     trailing: step.status == 'pending'
                         ? const Icon(Icons.play_circle_fill, color: Colors.blue, size: 32)
                         : const Icon(Icons.check_circle, color: Colors.green, size: 32),
-                    onTap: () {
-                      context.pushNamed(
-                        'lesson',
-                        pathParameters: {'stepId': step.id},
-                        queryParameters: {'conceptId': step.conceptId},
-                      );
-                    },
+                    onTap: () => context.pushNamed('lesson', extra: step),
                   ),
                 );
               },

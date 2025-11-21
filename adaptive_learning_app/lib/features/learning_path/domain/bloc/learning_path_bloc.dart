@@ -2,7 +2,6 @@ import 'package:adaptive_learning_app/features/learning_path/data/dto/learning_p
 import 'package:adaptive_learning_app/features/learning_path/domain/repository/i_learning_path_repository.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
-import 'package:meta/meta.dart';
 
 part 'learning_path_event.dart';
 part 'learning_path_state.dart';

@@ -35,13 +35,40 @@ class LearningPathDto {
 }
 
 @immutable
+class ResourceDto {
+  const ResourceDto({
+    required this.id,
+    required this.title,
+    required this.type,
+    required this.url,
+    required this.duration,
+  });
+
+  final String id;
+  final String title;
+  final String type; // "Video", "Text" etc.
+  final String url;
+  final int duration;
+
+  factory ResourceDto.fromJson(Map<String, dynamic> json) {
+    return ResourceDto(
+      id: json['id'] as String,
+      title: json['title'] as String,
+      type: json['type'] as String,
+      url: json['url'] as String,
+      duration: (json['duration'] as num).toInt(),
+    );
+  }
+}
+
+@immutable
 class LearningStepDto {
   const LearningStepDto({
     required this.id,
     required this.stepNumber,
     required this.conceptId,
     required this.status,
-    required this.resourceIds,
+    required this.resources,
     this.estimatedTime,
     this.difficulty,
   });
@@ -50,7 +77,7 @@ class LearningStepDto {
   final int stepNumber;
   final String conceptId;
   final String status;
-  final List<String> resourceIds;
+  final List<ResourceDto> resources;
   final int? estimatedTime;
   final double? difficulty;
 
@@ -60,7 +87,9 @@ class LearningStepDto {
       stepNumber: json['step_number'] as int,
       conceptId: json['concept_id'] as String,
       status: json['status'] as String,
-      resourceIds: (json['resource_ids'] as List).map((e) => e as String).toList(),
+      resources: (json['resources'] as List)
+          .map((e) => ResourceDto.fromJson(e as Map<String, dynamic>))
+          .toList(),
       estimatedTime: json['estimated_time'] as int?,
       difficulty: (json['difficulty'] as num?)?.toDouble(),
     );
