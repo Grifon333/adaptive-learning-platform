@@ -41,3 +41,53 @@ class StudentProfileUpdate(BaseModel):
     cognitive_profile: dict[str, Any] | None = None
     learning_preferences: dict[str, Any] | None = None
     timezone: str | None = None
+
+
+class ResourceData(BaseModel):
+    id: str
+    title: str
+    type: str
+    url: str
+    duration: int
+
+
+class LearningStepCreate(BaseModel):
+    step_number: int
+    concept_id: str
+    resources: list[dict[str, Any]]
+    estimated_time: int | None = None
+    difficulty: float | None = None
+
+
+class LearningPathCreate(BaseModel):
+    goal_concepts: list[str]
+    steps: list[LearningStepCreate]
+    estimated_time: int | None = None
+
+
+class LearningStep(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    step_number: int
+    concept_id: str
+    resources: list[dict[str, Any]]
+    status: str
+    score: float | None = None
+    estimated_time: int | None = None
+    difficulty: float | None = None
+
+
+class LearningPath(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    student_id: uuid.UUID
+    goal_concepts: list[str]
+    status: str
+    completion_percentage: float
+    steps: list[LearningStep]
+
+
+class TokenRefresh(BaseModel):
+    refresh_token: str

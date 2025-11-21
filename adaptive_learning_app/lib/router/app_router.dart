@@ -3,8 +3,12 @@ import 'dart:async';
 import 'package:adaptive_learning_app/features/auth/domain/bloc/auth_bloc.dart';
 import 'package:adaptive_learning_app/features/auth/presentation/screens/login_screen.dart';
 import 'package:adaptive_learning_app/features/auth/presentation/screens/register_screen.dart';
-import 'package:adaptive_learning_app/features/dashboard/presentation/screens/dashboard_screen.dart';
 import 'package:adaptive_learning_app/features/debug/i_debug_service.dart';
+import 'package:adaptive_learning_app/features/learning_path/data/dto/learning_path_dtos.dart';
+import 'package:adaptive_learning_app/features/learning_path/presentation/screens/goal_selection_screen.dart';
+import 'package:adaptive_learning_app/features/learning_path/presentation/screens/learning_path_screen.dart';
+import 'package:adaptive_learning_app/features/learning_path/presentation/screens/lesson_screen.dart';
+import 'package:adaptive_learning_app/features/learning_path/presentation/screens/quiz_screen.dart';
 import 'package:adaptive_learning_app/features/profile/presentation/screens/profile_screen.dart';
 import 'package:adaptive_learning_app/features/root/root_screen.dart';
 import 'package:adaptive_learning_app/features/splash/splash_screen.dart';
@@ -42,7 +46,11 @@ class AppRouter {
             // 1. Dashboard
             StatefulShellBranch(
               routes: [
-                GoRoute(path: '/dashboard', name: 'dashboard', builder: (context, state) => const DashboardScreen()),
+                GoRoute(
+                  path: '/dashboard',
+                  name: 'dashboard',
+                  builder: (context, state) => const GoalSelectionScreen(),
+                ),
               ],
             ),
             // 2. Profile
@@ -56,6 +64,24 @@ class AppRouter {
         GoRoute(path: '/splash', name: 'splash', builder: (context, state) => const SplashScreen()),
         GoRoute(path: '/login', name: 'login', builder: (context, state) => const LoginScreen()),
         GoRoute(path: '/register', name: 'register', builder: (context, state) => const RegisterScreen()),
+
+        GoRoute(path: '/learning-path', name: 'learning-path', builder: (context, state) => const LearningPathScreen()),
+        GoRoute(
+          path: '/lesson',
+          name: 'lesson',
+          builder: (context, state) {
+            final step = state.extra as LearningStepDto;
+            return LessonScreen(step: step);
+          },
+        ),
+        GoRoute(
+          path: '/quiz',
+          name: 'quiz',
+          builder: (context, state) {
+            final args = state.extra as Map<String, String>;
+            return QuizScreen(stepId: args['stepId']!, conceptId: args['conceptId']!);
+          },
+        ),
       ],
     );
   }

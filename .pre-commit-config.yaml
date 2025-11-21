@@ -1,0 +1,81 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+
+  # --- Ruff ---
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.4.7
+    hooks:
+      - id: ruff
+        name: ruff (user_service)
+        args: [--fix, --config=backend/services/user_service/pyproject.toml]
+        files: ^backend/services/user_service/
+      - id: ruff-format
+        name: ruff-format (user_service)
+        args: [--config=backend/services/user_service/pyproject.toml]
+        files: ^backend/services/user_service/
+
+      - id: ruff
+        name: ruff (knowledge_graph_service)
+        args:
+          [
+            --fix,
+            --config=backend/services/knowledge_graph_service/pyproject.toml,
+          ]
+        files: ^backend/services/knowledge_graph_service/
+      - id: ruff-format
+        name: ruff-format (knowledge_graph_service)
+        args: [--config=backend/services/knowledge_graph_service/pyproject.toml]
+        files: ^backend/services/knowledge_graph_service/
+
+      - id: ruff
+        name: ruff (learning_path_service)
+        args:
+          [
+            --fix,
+            --config=backend/services/learning_path_service/pyproject.toml,
+          ]
+        files: ^backend/services/learning_path_service/
+      - id: ruff-format
+        name: ruff-format (learning_path_service)
+        args: [--config=backend/services/learning_path_service/pyproject.toml]
+        files: ^backend/services/learning_path_service/
+
+  # --- Mypy ---
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.10.0
+    hooks:
+      - id: mypy
+        name: mypy (user_service)
+        args:
+          [
+            --config-file=backend/services/user_service/pyproject.toml,
+            "backend/services/user_service/",
+          ]
+        files: ^backend/services/user_service/
+        pass_filenames: false
+
+      - id: mypy
+        name: mypy (knowledge_graph_service)
+        args:
+          [
+            --config-file=backend/services/knowledge_graph_service/pyproject.toml,
+            "backend/services/knowledge_graph_service/",
+          ]
+        files: ^backend/services/knowledge_graph_service/
+        pass_filenames: false
+
+      - id: mypy
+        name: mypy (learning_path_service)
+        args:
+          [
+            --config-file=backend/services/learning_path_service/pyproject.toml,
+            "backend/services/learning_path_service/",
+          ]
+        files: ^backend/services/learning_path_service/
+        pass_filenames: false

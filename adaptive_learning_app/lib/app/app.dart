@@ -4,6 +4,7 @@ import 'package:adaptive_learning_app/app/depends_providers.dart';
 import 'package:adaptive_learning_app/di/di_container.dart';
 import 'package:adaptive_learning_app/features/auth/domain/bloc/auth_bloc.dart';
 import 'package:adaptive_learning_app/features/error/error_screen.dart';
+import 'package:adaptive_learning_app/features/learning_path/domain/bloc/learning_path_bloc.dart';
 import 'package:adaptive_learning_app/features/splash/splash_screen.dart';
 import 'package:adaptive_learning_app/l10n/gen/app_localizations.dart';
 import 'package:adaptive_learning_app/l10n/localization_notifier.dart';
@@ -73,11 +74,13 @@ class _App extends StatelessWidget {
       authRepository: diContainer.repositories.authRepository,
       secureStorage: diContainer.services.secureStorage,
     );
+    final learningPathBloc = LearningPathBloc(repository: diContainer.repositories.learningPathRepository);
     final router = AppRouter.createRouter(diContainer.debugService, authBloc);
 
     return DependsProviders(
       diContainer: diContainer,
       authBloc: authBloc,
+      learningPathBloc: learningPathBloc,
       child: MaterialApp.router(
         routerConfig: router,
         // --- Localization ---
