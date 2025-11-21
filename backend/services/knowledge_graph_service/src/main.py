@@ -105,6 +105,8 @@ async def get_concept_details(
 
         return schemas.Concept(**dict(concept_node), resources=resources_data)
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error getting concept: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -212,6 +214,8 @@ async def create_relationship(
             )
 
         return {"status": "created", "type": record["rel_type"]}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error creating relationship: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
