@@ -118,7 +118,7 @@ class LearningStep(Base):
     )
     step_number = Column(Integer, nullable=False)
     concept_id = Column(String(100), nullable=False)
-    resource_ids = Column(JSONB, nullable=False)  # ["res_uuid_1", "res_uuid_2"]
+    resources = Column(JSONB, nullable=False, default=[])
     estimated_time = Column(Integer, nullable=True)
     actual_time = Column(Integer, nullable=True)
     difficulty = Column(Float, nullable=True)

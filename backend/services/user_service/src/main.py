@@ -219,7 +219,7 @@ def create_learning_path(
             path=db_path,
             step_number=step_data.step_number,
             concept_id=step_data.concept_id,
-            resource_ids=step_data.resource_ids,
+            resources=step_data.resources,
             estimated_time=step_data.estimated_time,
             difficulty=step_data.difficulty,
         )
