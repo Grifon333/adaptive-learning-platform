@@ -8,6 +8,7 @@ import 'package:adaptive_learning_app/features/learning_path/data/dto/learning_p
 import 'package:adaptive_learning_app/features/learning_path/presentation/screens/goal_selection_screen.dart';
 import 'package:adaptive_learning_app/features/learning_path/presentation/screens/learning_path_screen.dart';
 import 'package:adaptive_learning_app/features/learning_path/presentation/screens/lesson_screen.dart';
+import 'package:adaptive_learning_app/features/learning_path/presentation/screens/quiz_screen.dart';
 import 'package:adaptive_learning_app/features/profile/presentation/screens/profile_screen.dart';
 import 'package:adaptive_learning_app/features/root/root_screen.dart';
 import 'package:adaptive_learning_app/features/splash/splash_screen.dart';
@@ -71,6 +72,14 @@ class AppRouter {
           builder: (context, state) {
             final step = state.extra as LearningStepDto;
             return LessonScreen(step: step);
+          },
+        ),
+        GoRoute(
+          path: '/quiz',
+          name: 'quiz',
+          builder: (context, state) {
+            final args = state.extra as Map<String, String>;
+            return QuizScreen(stepId: args['stepId']!, conceptId: args['conceptId']!);
           },
         ),
       ],
