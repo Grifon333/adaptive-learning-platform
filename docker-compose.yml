@@ -118,6 +118,7 @@ services:
     environment:
       - USER_SERVICE_URL=http://user_service:8000
       - KG_SERVICE_URL=http://knowledge_graph_service:8000
+      - ML_SERVICE_URL=http://ml_service:8000
       - LOG_LEVEL=INFO
     volumes:
       - ./backend/services/learning_path_service/src:/app/src

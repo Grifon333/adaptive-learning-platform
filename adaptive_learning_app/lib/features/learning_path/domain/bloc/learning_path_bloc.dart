@@ -15,7 +15,7 @@ class LearningPathBloc extends Bloc<LearningPathEvent, LearningPathState> {
 
   final ILearningPathRepository _repository;
   // TODO: Replace with actual student ID retrieval logic
-  final String _studentId = "dummy-student-id";
+  final String _studentId = "d3172e75-37c3-4eac-8800-a298f9e61840";
 
   Future<void> _onGeneratePath(GeneratePathRequested event, Emitter<LearningPathState> emit) async {
     emit(LearningPathLoading());

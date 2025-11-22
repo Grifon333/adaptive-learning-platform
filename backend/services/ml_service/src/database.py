@@ -54,3 +54,21 @@ def update_knowledge_state(student_id: str, concept_id: str, mastery_level: floa
     except Exception as e:
         logger.error(f"DB Error: {e}")
         raise
+
+
+def get_knowledge_state(student_id: str, concept_id: str):
+    """
+    Receives the current state of knowledge from the database.
+    """
+    query = text("""
+        SELECT mastery_level, confidence
+        FROM knowledge_states
+        WHERE student_id = :student_id AND concept_id = :concept_id
+    """)
+
+    with engine.connect() as conn:
+        result = conn.execute(query, {"student_id": student_id, "concept_id": concept_id}).fetchone()
+        if result:
+            return {"mastery_level": result[0], "confidence": result[1]}
+        else:
+            return {"mastery_level": 0.0, "confidence": 0.0}
