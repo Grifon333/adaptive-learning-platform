@@ -156,6 +156,7 @@ services:
     environment:
       - REDIS_URL=redis://redis:6379/0
       - LOG_LEVEL=INFO
+      - DATABASE_URL=postgresql://admin:password123@postgres:5432/adaptive_learning_db
     depends_on:
       redis:
         condition: service_healthy
@@ -171,6 +172,7 @@ services:
     environment:
       - REDIS_URL=redis://redis:6379/0
       - LOG_LEVEL=INFO
+      - DATABASE_URL=postgresql://admin:password123@postgres:5432/adaptive_learning_db
     depends_on:
       - redis
       - ml_service

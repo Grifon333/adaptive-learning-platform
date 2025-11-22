@@ -9,7 +9,7 @@ final class EventRepository implements IEventRepository {
   final IHttpClient httpClient;
 
   // TODO: Change to real profile ID (through BLoC or Storage)
-  final String _studentId = "035e02ed-ad86-425c-a03d-cde744bfd1b1";
+  final String _studentId = "d3172e75-37c3-4eac-8800-a298f9e61840";
 
   @override
   String get name => 'EventRepository';

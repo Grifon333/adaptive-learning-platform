@@ -3,6 +3,7 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     REDIS_URL: str
     LOG_LEVEL: str = "INFO"
+    DATABASE_URL: str
 
     # DKT model parameters (Deep Knowledge Tracing)
     INPUT_DIM: int = 100  # Number of unique concepts (vocabulary size)
