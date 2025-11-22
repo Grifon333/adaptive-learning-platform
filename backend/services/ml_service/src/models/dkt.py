@@ -9,8 +9,8 @@ class DKT(nn.Module):
         self.layer_dim = layer_dim
         self.output_dim = output_dim
 
-        # Embeddings: вхід це комбінація (ConceptID + Correctness)
-        # Якщо концепцій 100, то вхідних значень 200 (0-99 - помилки, 100-199 - успіх)
+        # Embeddings: the input is a combination (ConceptID + Correctness)
+        # If there are 100 concepts, there are 200 input values (0-99 - errors, 100-199 - success)
         self.embedding = nn.Embedding(input_dim * 2, hidden_dim)
 
         self.lstm = nn.LSTM(hidden_dim, hidden_dim, layer_dim, batch_first=True)
@@ -29,8 +29,8 @@ class DKT(nn.Module):
         res = self.sigmoid(self.fc(out))
         return res
 
-# Функція-фабрика для ініціалізації моделі
+# Factory function for model initialization
 def get_model(config):
     model = DKT(config.INPUT_DIM, config.HIDDEN_DIM, config.LAYER_DIM, config.OUTPUT_DIM)
-    model.eval() # Встановлюємо режим inference (без навчання)
+    model.eval() # Set inference mode (no training)
     return model

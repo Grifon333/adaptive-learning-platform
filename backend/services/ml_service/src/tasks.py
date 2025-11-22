@@ -4,35 +4,35 @@ import torch
 from .models.dkt import get_model
 from .config import settings
 
-# Ініціалізуємо модель при старті воркера
-# У майбутньому тут буде завантаження ваг: model.load_state_dict(torch.load(...))
+# Initialize the model when starting the worker
+# In the future, weights will be loaded here: model.load_state_dict(torch.load(...))
 model = get_model(settings)
 
 @celery_app.task(name="process_student_interaction")
 def process_student_interaction(student_id: str, concept_id: str, is_correct: bool):
     """
-    Задача, яка приймає результат тесту та оновлює стан знань студента.
+    Task that receives a test result and updates the student's knowledge state.
     """
     logger.info(f"ML Worker: Processing interaction for student {student_id}")
     logger.info(f"   Concept: {concept_id}, Correct: {is_correct}")
 
-    # --- 1. ЕМУЛЯЦІЯ DKT ПРОГНОЗУ ---
-    # У реальній системі тут ми б зробили запит до БД за історією студента
+    # --- 1. EMULATE DKT PREDICTION ---
+    # In a real system, here we would query the database for the student's history
 
-    # Створюємо фейковий вхідний тензор (batch_size=1, seq_len=1)
-    # Просто щоб перевірити, що PyTorch працює
+    # Create a fake input tensor (batch_size=1, seq_len=1)
+    # Just to verify that PyTorch is functioning
     dummy_input = torch.tensor([[1]])
 
     with torch.no_grad():
         prediction = model(dummy_input)
 
-    # Отримуємо "передбачення" (просто число від 0 до 1)
+    # Get the "prediction" (just a number between 0 and 1)
     predicted_mastery = prediction[0, 0, 0].item()
 
     logger.success(f"🧠 DKT Prediction: New mastery for concept {concept_id} -> {predicted_mastery:.4f}")
 
-    # --- 2. ТУТ БУДЕ ОНОВЛЕННЯ POSTGRES (у наступних кроках) ---
-    # Ми викличемо User Service або запишемо в БД напряму
+    # --- 2. HERE WILL BE POSTGRES UPDATE (in the next steps) ---
+    # We will call the User Service or write directly to the database
 
     return {
         "student_id": student_id,
