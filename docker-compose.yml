@@ -138,10 +138,12 @@ services:
     environment:
       - MONGODB_URL=mongodb://mongodb:27017
       - LOG_LEVEL=INFO
+      - REDIS_URL=redis://redis:6379/0
     volumes:
       - ./backend/services/event_service/src:/app/src
     depends_on:
       - mongodb
+      - redis
     networks:
       - adaptive_network
 
