@@ -145,6 +145,36 @@ services:
     networks:
       - adaptive_network
 
+  ml_service:
+    build:
+      context: ./backend/services/ml_service
+    container_name: alp_ml_service
+    ports:
+      - "8004:8000"
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - LOG_LEVEL=INFO
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - adaptive_network
+
+  celery_worker:
+    build:
+      context: ./backend/services/ml_service
+    container_name: alp_celery_worker
+    # Команда запуску саме для Worker
+    command: ["poetry", "run", "celery", "-A", "src.celery_app", "worker", "--loglevel=info"]
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - LOG_LEVEL=INFO
+    depends_on:
+      - redis
+      - ml_service
+    networks:
+      - adaptive_network
+
 # Томи для збереження даних
 volumes:
   postgres_data:
