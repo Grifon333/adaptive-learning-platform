@@ -52,9 +52,9 @@ class _DashboardView extends StatelessWidget {
             const _RecommendationsList(),
             const SizedBox(height: 24),
             ElevatedButton.icon(
-              onPressed: () => context.pushNamed('goals'),
-              icon: const Icon(Icons.add_road),
-              label: const Text('Create a new trajectory'),
+              onPressed: () => context.pushNamed('paths_list'),
+              icon: const Icon(Icons.list_alt),
+              label: const Text('Список траєкторій'),
               style: ElevatedButton.styleFrom(padding: const EdgeInsets.all(16)),
             ),
           ],

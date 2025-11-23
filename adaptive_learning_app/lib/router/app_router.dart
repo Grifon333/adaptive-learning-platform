@@ -6,8 +6,10 @@ import 'package:adaptive_learning_app/features/auth/presentation/screens/registe
 import 'package:adaptive_learning_app/features/dashboard/presentation/screens/dashboard_screen.dart';
 import 'package:adaptive_learning_app/features/debug/i_debug_service.dart';
 import 'package:adaptive_learning_app/features/learning_path/data/dto/learning_path_dtos.dart';
-import 'package:adaptive_learning_app/features/learning_path/presentation/screens/goal_selection_screen.dart';
+import 'package:adaptive_learning_app/features/learning_path/presentation/screens/concept_selector_screen.dart';
+import 'package:adaptive_learning_app/features/learning_path/presentation/screens/create_path_mode_screen.dart';
 import 'package:adaptive_learning_app/features/learning_path/presentation/screens/learning_path_screen.dart';
+import 'package:adaptive_learning_app/features/learning_path/presentation/screens/learning_paths_list_screen.dart';
 import 'package:adaptive_learning_app/features/learning_path/presentation/screens/lesson_screen.dart';
 import 'package:adaptive_learning_app/features/learning_path/presentation/screens/quiz_screen.dart';
 import 'package:adaptive_learning_app/features/profile/presentation/screens/profile_screen.dart';
@@ -52,7 +54,31 @@ class AppRouter {
                   name: 'dashboard',
                   builder: (context, state) => const DashboardScreen(),
                   routes: [
-                    GoRoute(path: 'goals', name: 'goals', builder: (context, state) => const GoalSelectionScreen()),
+                    // List of trajectories
+                    GoRoute(
+                      path: 'paths',
+                      name: 'paths_list',
+                      builder: (context, state) => const LearningPathsListScreen(),
+                      routes: [
+                        // Creation mode selection screen
+                        GoRoute(
+                          path: 'create',
+                          name: 'create_path_mode',
+                          builder: (context, state) => const CreatePathModeScreen(),
+                          routes: [
+                            // Concept selection screen (dynamic)
+                            GoRoute(
+                              path: 'select',
+                              name: 'concept_selector',
+                              builder: (context, state) {
+                                final mode = state.extra as CreatePathMode;
+                                return ConceptSelectorScreen(mode: mode);
+                              },
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ],
                 ),
               ],
