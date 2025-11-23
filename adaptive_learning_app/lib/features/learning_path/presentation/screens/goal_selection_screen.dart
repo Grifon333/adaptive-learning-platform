@@ -11,7 +11,7 @@ class GoalSelectionScreen extends StatelessWidget {
     {
       'title': 'Python Basics',
       'subtitle': 'Start your programming journey',
-      'startNodeId': 'ff9eecf7-81fc-489d-9e8e-2f6360595f02',
+      'startNodeId': 'ff9eecf7-81fc-489d-9e8e-2f6360595f02', // Optional
       'endNodeId': 'de53b2dd-b583-4d9c-a190-65e83b26c2b6',
       'icon': '🐍',
     },
@@ -59,7 +59,7 @@ class _GoalCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         onTap: () {
           context.read<LearningPathBloc>().add(
-            GeneratePathRequested(startConceptId: goal['startNodeId']!, goalConceptId: goal['endNodeId']!),
+            GeneratePathRequested(startConceptId: goal['startNodeId'], goalConceptId: goal['endNodeId']!),
           );
           context.pushNamed('learning-path');
         },

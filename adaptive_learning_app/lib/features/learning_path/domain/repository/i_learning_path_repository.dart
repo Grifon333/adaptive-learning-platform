@@ -4,8 +4,8 @@ import 'package:adaptive_learning_app/features/learning_path/data/dto/learning_p
 abstract interface class ILearningPathRepository with DiBaseRepository {
   Future<LearningPathDto> generatePath({
     required String studentId,
-    required String startConceptId,
     required String goalConceptId,
+    String? startConceptId,
   });
 
   Future<List<LearningStepDto>> getRecommendations(String studentId);

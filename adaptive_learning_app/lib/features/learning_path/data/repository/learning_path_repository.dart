@@ -14,7 +14,7 @@ final class LearningPathRepository implements ILearningPathRepository {
   @override
   Future<LearningPathDto> generatePath({
     required String studentId,
-    required String startConceptId,
+    String? startConceptId,
     required String goalConceptId,
   }) async {
     final request = LearningPathRequest(startConceptId: startConceptId, goalConceptId: goalConceptId);

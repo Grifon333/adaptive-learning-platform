@@ -224,7 +224,7 @@ async def create_relationship(
 
 @app.get("/api/v1/path", response_model=schemas.PathResponse)
 async def get_shortest_path(
-    start_id: str, end_id: str, db: AsyncSession = Depends(get_db_session)
+    end_id: str, start_id: str | None = None, db: AsyncSession = Depends(get_db_session)
 ):
     """
     Finds path and returns concepts populated with their resources.
@@ -233,20 +233,47 @@ async def get_shortest_path(
     # 2. UNWIND the list of nodes to process each one individually
     # 3. For each node (Concept), we search for associated resources
     # 4. Collect everything back into a list
-    query = (
-        "MATCH (start:Concept {id: $start_id}), (end:Concept {id: $end_id}), "
-        "p = shortestPath((start)-[:PREREQUISITE*]->(end)) "
-        "WITH nodes(p) AS path_nodes "
-        "UNWIND path_nodes AS c "
-        "OPTIONAL MATCH (c)-[:HAS_RESOURCE]->(r:Resource) "
-        "RETURN c, collect(r) as resources"
-    )
+
+    if start_id:
+        # 1. Classic search from A to B
+        query = (
+            "MATCH (start:Concept {id: $start_id}), (end:Concept {id: $end_id}), "
+            "p = shortestPath((start)-[:PREREQUISITE*]->(end)) "
+            "WITH nodes(p) AS path_nodes "
+            "UNWIND path_nodes AS c "
+            "OPTIONAL MATCH (c)-[:HAS_RESOURCE]->(r:Resource) "
+            "RETURN c, collect(r) as resources"
+        )
+        params = {"start_id": start_id, "end_id": end_id}
+    else:
+        # 2. Search for the "root" (a node with no incoming links from which you can reach the goal)
+        # Logic: Find a path p to end_node where the first node has no incoming links PREREQUISITE
+        query = (
+            "MATCH (end:Concept {id: $end_id}) "
+            "MATCH p = (start:Concept)-[:PREREQUISITE*]->(end) "
+            "WHERE NOT (start)<-[:PREREQUISITE]-() "
+            "WITH p, length(p) as len ORDER BY len DESC LIMIT 1 "  # Take the longest path from the root
+            "WITH nodes(p) AS path_nodes "
+            "UNWIND path_nodes AS c "
+            "OPTIONAL MATCH (c)-[:HAS_RESOURCE]->(r:Resource) "
+            "RETURN c, collect(r) as resources"
+        )
+        params = {"end_id": end_id}
 
     try:
-        result = await db.run(query, {"start_id": start_id, "end_id": end_id})
+        result = await db.run(query, params)
         records = [record async for record in result]
 
         if not records:
+            if not start_id:
+                # Try to simply return the target itself if it has no dependencies.
+                fallback_query = (
+                    "MATCH (c:Concept {id: $end_id}) "
+                    "OPTIONAL MATCH (c)-[:HAS_RESOURCE]->(r:Resource) "
+                    "RETURN c, collect(r) as resources"
+                )
+                result = await db.run(fallback_query, {"end_id": end_id})
+                records = [record async for record in result]
             logger.warning(f"No path found from {start_id} to {end_id}")
             return schemas.PathResponse(path=[])
 

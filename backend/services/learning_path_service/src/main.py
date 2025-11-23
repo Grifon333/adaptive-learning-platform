@@ -34,17 +34,18 @@ def get_http_client() -> httpx.AsyncClient:
 
 
 async def _fetch_kg_path(
-    client: httpx.AsyncClient, start_id: str, end_id: str
+    client: httpx.AsyncClient, end_id: str, start_id: str | None = None
 ) -> schemas.KGSPathResponse:
     """
     Receives the "raw" path from the Knowledge Graph Service.
     """
     kgs_url = f"{config.settings.KG_SERVICE_URL}/api/v1/path"
+    params = {"end_id": end_id}
+    if start_id:
+        params["start_id"] = start_id
     try:
         logger.info(f"Calling KGS at {kgs_url}...")
-        kgs_response = await client.get(
-            kgs_url, params={"start_id": start_id, "end_id": end_id}
-        )
+        kgs_response = await client.get(kgs_url, params=params)
         kgs_response.raise_for_status()
         return schemas.KGSPathResponse(**kgs_response.json())
     except httpx.HTTPStatusError as e:
@@ -143,7 +144,7 @@ async def create_learning_path(
 
     # 1. Get Raw Path from KGS
     kgs_data = await _fetch_kg_path(
-        client, request.start_concept_id, request.goal_concept_id
+        client, request.goal_concept_id, request.start_concept_id
     )
 
     if not kgs_data.path:

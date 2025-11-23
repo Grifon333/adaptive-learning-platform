@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 
 class LearningPathCreateRequest(BaseModel):
-    start_concept_id: str
+    start_concept_id: str | None = None
     goal_concept_id: str
 
 
