@@ -5,6 +5,7 @@ import sys
 
 from . import schemas, config
 from .database import connect_to_mongo, close_mongo_connection, db
+from .celery_producer import celery_app
 
 logger.remove()
 logger.add(sys.stdout, level=config.settings.LOG_LEVEL)
@@ -17,14 +18,46 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Event Service", lifespan=lifespan)
 
+
+def trigger_ml_pipeline(event_data: dict):
+    """
+    Sends a task to Celery if the event relates to test results.
+    """
+    event_type = event_data.get("event_type")
+
+    if event_type == "QUIZ_SUBMIT":
+        context = event_data.get("metadata", {}) # Flutter sends data in metadata
+        student_id = event_data.get("student_id")
+
+        # Extract the data needed for DKT
+        concept_id = context.get("concept_id")
+        is_correct = context.get("is_correct")
+
+        if concept_id and is_correct is not None:
+            logger.info(f"🧠 Triggering ML task for student {student_id}")
+
+            celery_app.send_task(
+                "process_student_interaction",
+                args=[student_id, concept_id, is_correct],
+                queue="celery"
+            )
+        else:
+            logger.warning(f"QUIZ_SUBMIT event missing required metadata: {context}")
+
+
 async def save_event_to_db(event_data: dict):
-    """Background task to save an event to MongoDB."""
+    """Background task: Save to Mongo AND trigger ML if needed."""
     try:
+        # 1. Stored in a "Data Lake"
         collection = db.get_db()["events"]
         await collection.insert_one(event_data)
-        # logger.debug(f"Event saved: {event_data['event_type']} for user {event_data['student_id']}")
+
+        # 2. Trigger ML Pipeline (Fire and Forget)
+        # Doing this synchronously because sending to Redis is very fast.
+        trigger_ml_pipeline(event_data)
+
     except Exception as e:
-        logger.error(f"Failed to save event asynchronously: {e}")
+        logger.error(f"Failed to process event: {e}")
 
 @app.post(
     "/api/v1/events",

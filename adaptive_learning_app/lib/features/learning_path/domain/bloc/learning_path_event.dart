@@ -7,9 +7,9 @@ sealed class LearningPathEvent extends Equatable {
 }
 
 class GeneratePathRequested extends LearningPathEvent {
-  const GeneratePathRequested({required this.startConceptId, required this.goalConceptId});
+  const GeneratePathRequested({required this.goalConceptId, this.startConceptId});
 
-  final String startConceptId;
+  final String? startConceptId;
   final String goalConceptId;
 
   @override

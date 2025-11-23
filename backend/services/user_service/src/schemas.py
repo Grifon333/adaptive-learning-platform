@@ -57,6 +57,7 @@ class LearningStepCreate(BaseModel):
     resources: list[dict[str, Any]]
     estimated_time: int | None = None
     difficulty: float | None = None
+    status: str = "pending"
 
 
 class LearningPathCreate(BaseModel):

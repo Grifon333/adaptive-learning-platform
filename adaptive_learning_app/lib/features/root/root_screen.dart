@@ -22,6 +22,7 @@ class _RootScreenState extends State<RootScreen> {
       // Debug button
       floatingActionButton: context.di.env != AppEnv.prod
           ? FloatingActionButton(
+              heroTag: 'debug_fab',
               child: const Icon(Icons.bug_report),
               onPressed: () {
                 // TODO: add DebugRoutes

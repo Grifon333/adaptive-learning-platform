@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 
 class LearningPathCreateRequest(BaseModel):
-    start_concept_id: str
+    start_concept_id: str | None = None
     goal_concept_id: str
 
 
@@ -44,6 +44,7 @@ class USLearningStepCreate(BaseModel):
     resources: list[dict[str, Any]]
     estimated_time: int
     difficulty: float
+    status: str = "pending"
 
 
 class USLearningPathCreate(BaseModel):
@@ -72,3 +73,25 @@ class LearningPathResponse(BaseModel):
     status: str
     completion_percentage: float
     steps: list[LearningStep]
+
+
+class RecommendationResponse(BaseModel):
+    recommendations: list[LearningStep]
+
+
+# --- Quiz Schemas ---
+
+
+class QuestionOption(BaseModel):
+    text: str
+    is_correct: bool
+
+
+class Question(BaseModel):
+    id: str
+    text: str
+    options: list[QuestionOption]
+
+
+class QuizResponse(BaseModel):
+    questions: list[Question]

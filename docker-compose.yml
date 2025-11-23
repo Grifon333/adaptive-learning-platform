@@ -118,6 +118,7 @@ services:
     environment:
       - USER_SERVICE_URL=http://user_service:8000
       - KG_SERVICE_URL=http://knowledge_graph_service:8000
+      - ML_SERVICE_URL=http://ml_service:8000
       - LOG_LEVEL=INFO
     volumes:
       - ./backend/services/learning_path_service/src:/app/src
@@ -138,10 +139,44 @@ services:
     environment:
       - MONGODB_URL=mongodb://mongodb:27017
       - LOG_LEVEL=INFO
+      - REDIS_URL=redis://redis:6379/0
     volumes:
       - ./backend/services/event_service/src:/app/src
     depends_on:
       - mongodb
+      - redis
+    networks:
+      - adaptive_network
+
+  ml_service:
+    build:
+      context: ./backend/services/ml_service
+    container_name: alp_ml_service
+    ports:
+      - "8004:8000"
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - LOG_LEVEL=INFO
+      - DATABASE_URL=postgresql://admin:password123@postgres:5432/adaptive_learning_db
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - adaptive_network
+
+  celery_worker:
+    build:
+      context: ./backend/services/ml_service
+    container_name: alp_celery_worker
+    # Команда запуску саме для Worker
+    command: ["poetry", "run", "celery", "-A", "src.celery_app", "worker", "--loglevel=info"]
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - LOG_LEVEL=INFO
+      - DATABASE_URL=postgresql://admin:password123@postgres:5432/adaptive_learning_db
+    depends_on:
+      - redis
+      - ml_service
     networks:
       - adaptive_network
 
