@@ -54,7 +54,7 @@ class _DashboardView extends StatelessWidget {
             ElevatedButton.icon(
               onPressed: () => context.pushNamed('paths_list'),
               icon: const Icon(Icons.list_alt),
-              label: const Text('Список траєкторій'),
+              label: const Text('List of trajectories'),
               style: ElevatedButton.styleFrom(padding: const EdgeInsets.all(16)),
             ),
           ],

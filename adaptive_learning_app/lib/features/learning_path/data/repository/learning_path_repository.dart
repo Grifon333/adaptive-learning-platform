@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:adaptive_learning_app/app/http/i_http_client.dart';
 import 'package:adaptive_learning_app/features/learning_path/data/dto/learning_path_dtos.dart';
+import 'package:adaptive_learning_app/features/learning_path/data/dto/quiz_dtos.dart';
 import 'package:adaptive_learning_app/features/learning_path/domain/repository/i_learning_path_repository.dart';
 
 final class LearningPathRepository implements ILearningPathRepository {
@@ -26,7 +27,6 @@ final class LearningPathRepository implements ILearningPathRepository {
       '$serviceUrl/api/v1/students/$studentId/learning-paths',
       data: request.toJson(),
     );
-
     return LearningPathDto.fromJson(response.data);
   }
 
@@ -34,10 +34,22 @@ final class LearningPathRepository implements ILearningPathRepository {
   Future<List<LearningStepDto>> getRecommendations(String studentId) async {
     // TODO: Temp solution for microservice communication
     final String host = Platform.isAndroid ? '10.0.2.2' : 'localhost';
-    final String serviceUrl = 'http://$host:8002'; // LP Service
+    final String serviceUrl = 'http://$host:8002';
     final response = await httpClient.get('$serviceUrl/api/v1/students/$studentId/recommendations');
     final data = response.data as Map<String, dynamic>;
     final list = data['recommendations'] as List;
     return list.map((e) => LearningStepDto.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  @override
+  Future<List<QuizQuestionDto>> getQuizForConcept(String conceptId) async {
+    // TODO: Temp solution for microservice communication
+    print('conceptId for Quiz: $conceptId');
+    final String host = Platform.isAndroid ? '10.0.2.2' : 'localhost';
+    final String serviceUrl = 'http://$host:8002';
+    final response = await httpClient.get('$serviceUrl/api/v1/quizzes/$conceptId');
+    final data = response.data as Map<String, dynamic>;
+    final list = data['questions'] as List;
+    return list.map((e) => QuizQuestionDto.fromJson(e)).toList();
   }
 }

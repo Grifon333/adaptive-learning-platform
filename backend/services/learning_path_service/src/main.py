@@ -279,6 +279,24 @@ async def get_student_recommendations(
     return schemas.RecommendationResponse(recommendations=formatted_recs)
 
 
+@app.get("/api/v1/quizzes/{concept_id}", response_model=schemas.QuizResponse)
+async def get_quiz_for_concept(
+    concept_id: str,
+    client: httpx.AsyncClient = Depends(get_http_client),
+):
+    """
+    Receives a test for the concept from the Knowledge Graph Service.
+    """
+    try:
+        kg_url = f"{config.settings.KG_SERVICE_URL}/api/v1/concepts/{concept_id}/quiz"
+        response = await client.get(kg_url)
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        logger.error(f"Failed to fetch quiz: {e}")
+        return {"questions": []}
+
+
 @app.get("/health")
 def health_check():
     return {"status": "ok", "service": "Learning Path Service"}

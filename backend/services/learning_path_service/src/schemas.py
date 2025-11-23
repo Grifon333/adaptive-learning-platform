@@ -77,3 +77,21 @@ class LearningPathResponse(BaseModel):
 
 class RecommendationResponse(BaseModel):
     recommendations: list[LearningStep]
+
+
+# --- Quiz Schemas ---
+
+
+class QuestionOption(BaseModel):
+    text: str
+    is_correct: bool
+
+
+class Question(BaseModel):
+    id: str
+    text: str
+    options: list[QuestionOption]
+
+
+class QuizResponse(BaseModel):
+    questions: list[Question]

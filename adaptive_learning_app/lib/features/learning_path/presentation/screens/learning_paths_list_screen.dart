@@ -140,7 +140,7 @@ class _PathCard extends StatelessWidget {
               Align(
                 alignment: Alignment.centerRight,
                 child: Text(
-                  '${path['completedSteps']} / ${path['stepsCount']} кроків',
+                  '${path['completedSteps']} / ${path['stepsCount']} steps',
                   style: TextStyle(color: Colors.grey[500], fontSize: 11),
                 ),
               ),

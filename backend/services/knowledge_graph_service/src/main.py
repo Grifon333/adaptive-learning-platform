@@ -1,3 +1,4 @@
+import json
 import uuid
 from contextlib import asynccontextmanager
 from typing import Any
@@ -347,6 +348,74 @@ async def get_recommendations(
 
     except Exception as e:
         logger.error(f"Error getting recommendations: {e}")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+# --- Quiz Endpoints ---
+
+
+@app.post(
+    "/api/v1/concepts/{concept_id}/questions", status_code=status.HTTP_201_CREATED
+)
+async def add_question_to_concept(
+    concept_id: str,
+    question: schemas.QuestionCreate,
+    db: AsyncSession = Depends(get_db_session),
+):
+    """
+    Creates a question and links it to a concept.
+    """
+    q_id = str(uuid.uuid4())
+    options_json = json.dumps([opt.model_dump() for opt in question.options])
+    query = (
+        "MATCH (c:Concept {id: $cid}) "
+        "CREATE (q:Question {id: $qid, text: $text, options: $options}) "
+        "CREATE (c)-[:HAS_QUESTION]->(q) "
+        "RETURN q"
+    )
+
+    try:
+        result = await db.run(
+            query,
+            {
+                "cid": concept_id,
+                "qid": q_id,
+                "text": question.text,
+                "options": options_json,
+            },
+        )
+        record = await result.single()
+
+        if not record:
+            raise HTTPException(status_code=404, detail="Concept not found")
+
+        return {"status": "created", "question_id": q_id}
+    except Exception as e:
+        logger.error(f"Error creating question: {e}")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@app.get("/api/v1/concepts/{concept_id}/quiz", response_model=schemas.QuizResponse)
+async def get_concept_quiz(concept_id: str, db: AsyncSession = Depends(get_db_session)):
+    """
+    Returns all questions for the concept.
+    """
+    query = "MATCH (c:Concept {id: $cid})-[:HAS_QUESTION]->(q:Question) " "RETURN q"
+
+    try:
+        result = await db.run(query, {"cid": concept_id})
+        records = [record async for record in result]
+
+        questions = []
+        for record in records:
+            node = dict(record["q"])
+            node["options"] = json.loads(node["options"])
+            questions.append(schemas.Question(**node))
+
+        return schemas.QuizResponse(questions=questions)
+
+    except Exception as e:
+        logger.error(f"Error fetching quiz: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 

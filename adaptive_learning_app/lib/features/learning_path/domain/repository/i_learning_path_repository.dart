@@ -1,5 +1,6 @@
 import 'package:adaptive_learning_app/di/di_base_repository.dart';
 import 'package:adaptive_learning_app/features/learning_path/data/dto/learning_path_dtos.dart';
+import 'package:adaptive_learning_app/features/learning_path/data/dto/quiz_dtos.dart';
 
 abstract interface class ILearningPathRepository with DiBaseRepository {
   Future<LearningPathDto> generatePath({
@@ -9,4 +10,6 @@ abstract interface class ILearningPathRepository with DiBaseRepository {
   });
 
   Future<List<LearningStepDto>> getRecommendations(String studentId);
+
+  Future<List<QuizQuestionDto>> getQuizForConcept(String conceptId);
 }
