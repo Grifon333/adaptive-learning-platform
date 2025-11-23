@@ -7,4 +7,6 @@ abstract interface class ILearningPathRepository with DiBaseRepository {
     required String startConceptId,
     required String goalConceptId,
   });
+
+  Future<List<LearningStepDto>> getRecommendations(String studentId);
 }

@@ -1,3 +1,4 @@
+import uuid
 from contextlib import asynccontextmanager
 
 import httpx
@@ -208,6 +209,73 @@ async def create_learning_path(
 
     logger.success(f"Successfully created and saved path {final_path.id}")
     return final_path
+
+
+@app.get(
+    "/api/v1/students/{student_id}/recommendations",
+    response_model=schemas.RecommendationResponse,
+)
+async def get_student_recommendations(
+    student_id: str,
+    client: httpx.AsyncClient = Depends(get_http_client),
+):
+    """
+    Recommendation orchestrator:
+    1. Get a knowledge map from ML Service.
+    2. Filter out concepts that the student knows well (mastery > 0.7).
+    3. Send the list of “known” IDs to KG Service.
+    4. Get a list of recommended concepts.
+    5. Format for the client.
+    """
+    logger.info(f"Generating recommendations for student {student_id}")
+
+    # 1. Recieve Mastery Map
+    try:
+        ml_url = (
+            f"{config.settings.ML_SERVICE_URL}/api/v1/students/{student_id}/mastery"
+        )
+        ml_response = await client.get(ml_url)
+        ml_response.raise_for_status()
+        mastery_map = ml_response.json().get("mastery_map", {})
+    except Exception as e:
+        logger.error(f"Failed to fetch mastery: {e}")
+        mastery_map = {}
+
+    # 2. Formatting a list of known concepts
+    # Consider a concept to be known if the confidence level is > 70%
+    known_ids = [cid for cid, score in mastery_map.items() if score > 0.7]
+
+    # 3. Ask Knowledge Graph
+    try:
+        kg_url = f"{config.settings.KG_SERVICE_URL}/api/v1/recommendations"
+        kg_response = await client.post(
+            kg_url, json={"known_concept_ids": known_ids, "limit": 5}
+        )
+        kg_response.raise_for_status()
+        concepts_data = kg_response.json().get("recommendations", [])
+    except Exception as e:
+        logger.error(f"Failed to fetch recommendations from KG: {e}")
+        raise HTTPException(
+            status_code=500, detail="Recommendation generation failed"
+        ) from e
+
+    # 4. Formatting the response
+    formatted_recs = []
+    for i, concept in enumerate(concepts_data):
+        # Convert KG format to LearningStep format for front-end unification
+        formatted_recs.append(
+            schemas.LearningStep(
+                id=uuid.uuid4(),  # Generate a temporary ID for the UI
+                step_number=i + 1,
+                concept_id=concept["id"],
+                resources=concept.get("resources", []),
+                status="pending",
+                estimated_time=concept.get("estimated_time"),
+                difficulty=concept.get("difficulty"),
+            )
+        )
+
+    return schemas.RecommendationResponse(recommendations=formatted_recs)
 
 
 @app.get("/health")

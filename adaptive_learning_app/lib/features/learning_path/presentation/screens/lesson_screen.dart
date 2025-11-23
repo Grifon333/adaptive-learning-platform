@@ -1,8 +1,6 @@
-import 'package:adaptive_learning_app/di/di_container.dart';
 import 'package:adaptive_learning_app/features/learning_path/data/dto/learning_path_dtos.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class LessonScreen extends StatefulWidget {

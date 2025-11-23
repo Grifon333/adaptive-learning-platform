@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:adaptive_learning_app/features/auth/domain/bloc/auth_bloc.dart';
 import 'package:adaptive_learning_app/features/auth/presentation/screens/login_screen.dart';
 import 'package:adaptive_learning_app/features/auth/presentation/screens/register_screen.dart';
+import 'package:adaptive_learning_app/features/dashboard/presentation/screens/dashboard_screen.dart';
 import 'package:adaptive_learning_app/features/debug/i_debug_service.dart';
 import 'package:adaptive_learning_app/features/learning_path/data/dto/learning_path_dtos.dart';
 import 'package:adaptive_learning_app/features/learning_path/presentation/screens/goal_selection_screen.dart';
@@ -49,7 +50,10 @@ class AppRouter {
                 GoRoute(
                   path: '/dashboard',
                   name: 'dashboard',
-                  builder: (context, state) => const GoalSelectionScreen(),
+                  builder: (context, state) => const DashboardScreen(),
+                  routes: [
+                    GoRoute(path: 'goals', name: 'goals', builder: (context, state) => const GoalSelectionScreen()),
+                  ],
                 ),
               ],
             ),

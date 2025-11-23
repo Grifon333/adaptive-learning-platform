@@ -29,4 +29,15 @@ final class LearningPathRepository implements ILearningPathRepository {
 
     return LearningPathDto.fromJson(response.data);
   }
+
+  @override
+  Future<List<LearningStepDto>> getRecommendations(String studentId) async {
+    // TODO: Temp solution for microservice communication
+    final String host = Platform.isAndroid ? '10.0.2.2' : 'localhost';
+    final String serviceUrl = 'http://$host:8002'; // LP Service
+    final response = await httpClient.get('$serviceUrl/api/v1/students/$studentId/recommendations');
+    final data = response.data as Map<String, dynamic>;
+    final list = data['recommendations'] as List;
+    return list.map((e) => LearningStepDto.fromJson(e as Map<String, dynamic>)).toList();
+  }
 }

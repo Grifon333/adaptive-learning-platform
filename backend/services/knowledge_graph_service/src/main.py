@@ -1,5 +1,6 @@
 import uuid
 from contextlib import asynccontextmanager
+from typing import Any
 
 from fastapi import Depends, FastAPI, HTTPException, status
 from loguru import logger
@@ -265,6 +266,60 @@ async def get_shortest_path(
 
     except Exception as e:
         logger.error(f"Neo4j error finding path: {e}")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@app.post("/api/v1/recommendations", response_model=schemas.RecommendationResponse)
+async def get_recommendations(
+    req: schemas.RecommendationRequest, db: AsyncSession = Depends(get_db_session)
+):
+    """
+    Finds concepts that are the next steps for those already studied.
+    1. Find all nodes from the known_concept_ids list.
+    2. Find their outgoing links (PREREQUISITE) to other nodes.
+    3. Filter out those that are already in known_concept_ids.
+    4. Return unique results.
+    """
+    # If the student knows nothing, we recommend "initial" nodes (without incoming links).)
+    if not req.known_concept_ids:
+        query = (
+            "MATCH (c:Concept) "
+            "WHERE NOT (c)<-[:PREREQUISITE]-(:Concept) "
+            "OPTIONAL MATCH (c)-[:HAS_RESOURCE]->(r:Resource) "
+            "RETURN c, collect(r) as resources LIMIT $limit"
+        )
+        params: dict[str, Any] = {"limit": req.limit}
+    else:
+        query = (
+            "MATCH (known:Concept)-[:PREREQUISITE]->(next:Concept) "
+            "WHERE known.id IN $known_ids "
+            "AND NOT next.id IN $known_ids "
+            "OPTIONAL MATCH (next)-[:HAS_RESOURCE]->(r:Resource) "
+            "RETURN DISTINCT next as c, collect(r) as resources "
+            "LIMIT $limit"
+        )
+        params = {
+            "known_ids": req.known_concept_ids,
+            "limit": req.limit,
+        }
+
+    try:
+        result = await db.run(query, params)
+        # records = await result.fetch(req.limit)
+        records = [record async for record in result]
+
+        recommendations = []
+        for record in records:
+            c_node = record["c"]
+            r_nodes = record["resources"]
+            resources_list = [schemas.Resource(**dict(r)) for r in r_nodes if r]
+            concept_obj = schemas.Concept(**dict(c_node), resources=resources_list)
+            recommendations.append(concept_obj)
+
+        return schemas.RecommendationResponse(recommendations=recommendations)
+
+    except Exception as e:
+        logger.error(f"Error getting recommendations: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 

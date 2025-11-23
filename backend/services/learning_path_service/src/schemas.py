@@ -73,3 +73,7 @@ class LearningPathResponse(BaseModel):
     status: str
     completion_percentage: float
     steps: list[LearningStep]
+
+
+class RecommendationResponse(BaseModel):
+    recommendations: list[LearningStep]

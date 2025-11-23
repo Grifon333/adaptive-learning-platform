@@ -59,3 +59,12 @@ class ResourceLink(BaseModel):
 
 class PathResponse(BaseModel):
     path: list[Concept]
+
+
+class RecommendationRequest(BaseModel):
+    known_concept_ids: list[str]
+    limit: int = 5
+
+
+class RecommendationResponse(BaseModel):
+    recommendations: list[Concept]

@@ -72,3 +72,18 @@ def get_knowledge_state(student_id: str, concept_id: str):
             return {"mastery_level": result[0], "confidence": result[1]}
         else:
             return {"mastery_level": 0.0, "confidence": 0.0}
+
+
+def get_all_student_knowledge(student_id: str):
+    """
+    Returns the dictionary {concept_id: mastery_level} for the student.
+    """
+    query = text("""
+        SELECT concept_id, mastery_level
+        FROM knowledge_states
+        WHERE student_id = :student_id
+    """)
+
+    with engine.connect() as conn:
+        result = conn.execute(query, {"student_id": student_id}).fetchall()
+        return {row[0]: row[1] for row in result}
