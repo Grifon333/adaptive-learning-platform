@@ -28,10 +28,13 @@ final class DiRepositories {
       );
       onProgress(authRepository.name);
 
-      learningPathRepository = LearningPathRepository(httpClient: diContainer.httpClient);
+      learningPathRepository = LearningPathRepository(
+        httpClient: diContainer.httpClient,
+        appConfig: diContainer.appConfig,
+      );
       onProgress(learningPathRepository.name);
 
-      eventRepository = EventRepository(httpClient: diContainer.httpClient);
+      eventRepository = EventRepository(httpClient: diContainer.httpClient, appConfig: diContainer.appConfig);
       onProgress(eventRepository.name);
 
       profileRepository = ProfileRepository(httpClient: diContainer.httpClient);

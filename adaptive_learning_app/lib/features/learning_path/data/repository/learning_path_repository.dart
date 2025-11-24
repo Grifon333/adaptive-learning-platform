@@ -1,13 +1,14 @@
-import 'dart:io';
+import 'package:adaptive_learning_app/app/app_config/app_config.dart';
 import 'package:adaptive_learning_app/app/http/i_http_client.dart';
 import 'package:adaptive_learning_app/features/learning_path/data/dto/learning_path_dtos.dart';
 import 'package:adaptive_learning_app/features/learning_path/data/dto/quiz_dtos.dart';
 import 'package:adaptive_learning_app/features/learning_path/domain/repository/i_learning_path_repository.dart';
 
 final class LearningPathRepository implements ILearningPathRepository {
-  LearningPathRepository({required this.httpClient});
+  LearningPathRepository({required this.httpClient, required this.appConfig});
 
   final IHttpClient httpClient;
+  final IAppConfig appConfig;
 
   @override
   String get name => 'LearningPathRepository';
@@ -15,27 +16,19 @@ final class LearningPathRepository implements ILearningPathRepository {
   @override
   Future<LearningPathDto> generatePath({
     required String studentId,
-    String? startConceptId,
     required String goalConceptId,
+    String? startConceptId,
   }) async {
     final request = LearningPathRequest(startConceptId: startConceptId, goalConceptId: goalConceptId);
-
-    // TODO: Temp solution for microservice communication
-    final String host = Platform.isAndroid ? '10.0.2.2' : 'localhost';
-    final String serviceUrl = 'http://$host:8002';
-    final response = await httpClient.post(
-      '$serviceUrl/api/v1/students/$studentId/learning-paths',
-      data: request.toJson(),
-    );
+    final serviceUrl = appConfig.learningPathServiceUrl;
+    final response = await httpClient.post('$serviceUrl/students/$studentId/learning-paths', data: request.toJson());
     return LearningPathDto.fromJson(response.data);
   }
 
   @override
   Future<List<LearningStepDto>> getRecommendations(String studentId) async {
-    // TODO: Temp solution for microservice communication
-    final String host = Platform.isAndroid ? '10.0.2.2' : 'localhost';
-    final String serviceUrl = 'http://$host:8002';
-    final response = await httpClient.get('$serviceUrl/api/v1/students/$studentId/recommendations');
+    final serviceUrl = appConfig.learningPathServiceUrl;
+    final response = await httpClient.get('$serviceUrl/students/$studentId/recommendations');
     final data = response.data as Map<String, dynamic>;
     final list = data['recommendations'] as List;
     return list.map((e) => LearningStepDto.fromJson(e as Map<String, dynamic>)).toList();
@@ -43,11 +36,8 @@ final class LearningPathRepository implements ILearningPathRepository {
 
   @override
   Future<List<QuizQuestionDto>> getQuizForConcept(String conceptId) async {
-    // TODO: Temp solution for microservice communication
-    print('conceptId for Quiz: $conceptId');
-    final String host = Platform.isAndroid ? '10.0.2.2' : 'localhost';
-    final String serviceUrl = 'http://$host:8002';
-    final response = await httpClient.get('$serviceUrl/api/v1/quizzes/$conceptId');
+    final serviceUrl = appConfig.learningPathServiceUrl;
+    final response = await httpClient.get('$serviceUrl/quizzes/$conceptId');
     final data = response.data as Map<String, dynamic>;
     final list = data['questions'] as List;
     return list.map((e) => QuizQuestionDto.fromJson(e)).toList();
