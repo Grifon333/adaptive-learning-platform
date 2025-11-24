@@ -1,5 +1,8 @@
+import 'dart:io';
+
 import 'package:adaptive_learning_app/app/app_env.dart';
 import 'package:envied/envied.dart';
+import 'package:flutter/foundation.dart';
 
 part 'app_config.g.dart';
 
@@ -14,6 +17,11 @@ abstract interface class IAppConfig {
   String get baseUrl;
   AppEnv get env;
   String get secretKey;
+
+  String get learningPathServiceUrl;
+  String get eventServiceUrl;
+  String get knowledgeGraphServiceUrl;
+  String get mlServiceUrl;
 }
 
 /// {@template app_config_dev}
@@ -31,12 +39,29 @@ class AppConfigDev implements IAppConfig {
   String get name => 'AppConfigDev';
 
   @override
-  @EnviedField()
-  final String baseUrl = _Dev.baseUrl;
-
-  @override
   @EnviedField(obfuscate: true)
   final String secretKey = _Dev.secretKey;
+
+  String get _host {
+    if (kIsWeb) return 'localhost';
+    if (Platform.isAndroid) return '10.0.2.2';
+    return '127.0.0.1';
+  }
+
+  @override
+  String get baseUrl => 'http://$_host:8000/api/v1';
+
+  @override
+  String get knowledgeGraphServiceUrl => 'http://$_host:8001/api/v1';
+
+  @override
+  String get learningPathServiceUrl => 'http://$_host:8002/api/v1';
+
+  @override
+  String get eventServiceUrl => 'http://$_host:8003/api/v1';
+
+  @override
+  String get mlServiceUrl => 'http://$_host:8004/api/v1';
 }
 
 /// {@template app_config_stage}
@@ -60,6 +85,18 @@ class AppConfigStage implements IAppConfig {
   @override
   @EnviedField(obfuscate: true)
   final String secretKey = _Stage.secretKey;
+
+  // Assuming Stage uses an API Gateway or specific domains
+  // For now, we point everything to baseUrl if it's a monolith gateway.
+
+  @override
+  String get learningPathServiceUrl => baseUrl;
+  @override
+  String get eventServiceUrl => baseUrl;
+  @override
+  String get knowledgeGraphServiceUrl => baseUrl;
+  @override
+  String get mlServiceUrl => baseUrl;
 }
 
 /// {@template app_config_prod}
@@ -83,4 +120,13 @@ class AppConfigProd implements IAppConfig {
   @override
   @EnviedField(obfuscate: true)
   final String secretKey = _Prod.secretKey;
+
+  @override
+  String get learningPathServiceUrl => baseUrl;
+  @override
+  String get eventServiceUrl => baseUrl;
+  @override
+  String get knowledgeGraphServiceUrl => baseUrl;
+  @override
+  String get mlServiceUrl => baseUrl;
 }
