@@ -1,3 +1,4 @@
+import 'package:adaptive_learning_app/features/auth/domain/bloc/auth_bloc.dart';
 import 'package:adaptive_learning_app/features/learning_path/domain/bloc/learning_path_bloc.dart';
 import 'package:adaptive_learning_app/features/learning_path/presentation/screens/create_path_mode_screen.dart';
 import 'package:flutter/material.dart';
@@ -65,8 +66,15 @@ class _ConceptSelectorScreenState extends State<ConceptSelectorScreen> {
             ElevatedButton(
               onPressed: _canSubmit(needsStart, needsEnd)
                   ? () {
+                      final authState = context.read<AuthBloc>().state;
+                      final studentId = (authState is AuthAuthenticated) ? authState.userId : '';
+                      if (studentId.isEmpty) return;
                       context.read<LearningPathBloc>().add(
-                        GeneratePathRequested(startConceptId: _selectedStartId, goalConceptId: _selectedEndId ?? ''),
+                        GeneratePathRequested(
+                          studentId: studentId,
+                          startConceptId: _selectedStartId,
+                          goalConceptId: _selectedEndId ?? '',
+                        ),
                       );
                       context.pushNamed('learning-path');
                     }

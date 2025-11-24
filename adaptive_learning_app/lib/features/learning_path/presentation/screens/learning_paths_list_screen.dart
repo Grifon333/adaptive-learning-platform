@@ -1,3 +1,4 @@
+import 'package:adaptive_learning_app/features/auth/domain/bloc/auth_bloc.dart';
 import 'package:adaptive_learning_app/features/learning_path/domain/bloc/learning_path_bloc.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -72,6 +73,9 @@ class _PathCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final authState = context.read<AuthBloc>().state;
+    final studentId = (authState is AuthAuthenticated) ? authState.userId : '';
+
     return Card(
       elevation: 3,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -79,7 +83,11 @@ class _PathCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         onTap: () {
           context.read<LearningPathBloc>().add(
-            GeneratePathRequested(startConceptId: path['startNodeId'], goalConceptId: path['endNodeId']),
+            GeneratePathRequested(
+              studentId: studentId,
+              startConceptId: path['startNodeId'],
+              goalConceptId: path['endNodeId'],
+            ),
           );
           context.pushNamed('learning-path');
         },
