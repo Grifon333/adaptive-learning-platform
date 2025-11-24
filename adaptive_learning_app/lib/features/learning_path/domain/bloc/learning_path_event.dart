@@ -15,3 +15,5 @@ class GeneratePathRequested extends LearningPathEvent {
   @override
   List<Object?> get props => [startConceptId, goalConceptId];
 }
+
+class LearningPathRefreshRequested extends LearningPathEvent {}
