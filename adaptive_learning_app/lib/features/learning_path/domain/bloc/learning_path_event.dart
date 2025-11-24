@@ -7,13 +7,17 @@ sealed class LearningPathEvent extends Equatable {
 }
 
 class GeneratePathRequested extends LearningPathEvent {
-  const GeneratePathRequested({required this.goalConceptId, this.startConceptId});
+  const GeneratePathRequested({required this.studentId, required this.goalConceptId, this.startConceptId});
 
+  final String studentId;
   final String? startConceptId;
   final String goalConceptId;
 
   @override
-  List<Object?> get props => [startConceptId, goalConceptId];
+  List<Object?> get props => [studentId, startConceptId, goalConceptId];
 }
 
-class LearningPathRefreshRequested extends LearningPathEvent {}
+class LearningPathRefreshRequested extends LearningPathEvent {
+  const LearningPathRefreshRequested(this.studentId);
+  final String studentId;
+}

@@ -10,10 +10,12 @@ class ProfileScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final profileRepository = context.di.repositories.profileRepository;
-    // TODO: Replace with actual user ID from AuthBloc when available
+    final authState = context.read<AuthBloc>().state;
+    String userId = 'unknown';
+    if (authState is AuthAuthenticated) userId = authState.userId;
+
     return BlocProvider(
-      create: (context) =>
-          ProfileBloc(profileRepository)..add(const ProfileFetchProfileEvent(id: '1')),
+      create: (context) => ProfileBloc(profileRepository)..add(ProfileFetchProfileEvent(id: userId)),
       child: const _ProfileScreenView(),
     );
   }

@@ -1,4 +1,5 @@
 import 'package:adaptive_learning_app/app/app_context_ext.dart';
+import 'package:adaptive_learning_app/features/auth/domain/bloc/auth_bloc.dart';
 import 'package:adaptive_learning_app/features/dashboard/domain/bloc/dashboard_bloc.dart';
 import 'package:adaptive_learning_app/features/learning_path/data/dto/learning_path_dtos.dart';
 import 'package:flutter/material.dart';
@@ -8,22 +9,27 @@ import 'package:go_router/go_router.dart';
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
 
-  // TODO: Get a real ID with AuthBloc
-  final String _studentId = "d3172e75-37c3-4eac-8800-a298f9e61840";
-
   @override
   Widget build(BuildContext context) {
+    final authState = context.read<AuthBloc>().state;
+    String? studentId;
+    if (authState is AuthAuthenticated) studentId = authState.userId;
+    // Fallback, if something went wrong (or redirect to login)
+    if (studentId == null) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+
     return BlocProvider(
       create: (context) =>
           DashboardBloc(repository: context.di.repositories.learningPathRepository)
-            ..add(DashboardLoadRequested(_studentId)),
-      child: const _DashboardView(),
+            ..add(DashboardLoadRequested(studentId!)),
+      child: _DashboardView(studentId: studentId),
     );
   }
 }
 
 class _DashboardView extends StatelessWidget {
-  const _DashboardView();
+  const _DashboardView({required this.studentId});
+
+  final String studentId;
 
   @override
   Widget build(BuildContext context) {
@@ -31,8 +37,7 @@ class _DashboardView extends StatelessWidget {
       appBar: AppBar(title: const Text('Dashboard')),
       body: RefreshIndicator(
         onRefresh: () async {
-          // TODO: Get a real ID
-          context.read<DashboardBloc>().add(const DashboardLoadRequested("d3172e75-37c3-4eac-8800-a298f9e61840"));
+          context.read<DashboardBloc>().add(DashboardLoadRequested(studentId));
         },
         child: ListView(
           padding: const EdgeInsets.all(16),

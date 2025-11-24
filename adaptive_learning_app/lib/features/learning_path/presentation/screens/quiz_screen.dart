@@ -1,4 +1,5 @@
 import 'package:adaptive_learning_app/di/di_container.dart';
+import 'package:adaptive_learning_app/features/auth/domain/bloc/auth_bloc.dart';
 import 'package:adaptive_learning_app/features/learning_path/data/dto/quiz_dtos.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -45,8 +46,12 @@ class _QuizScreenState extends State<QuizScreen> {
       final passed = score >= 0.6;
 
       try {
+        final authState = context.read<AuthBloc>().state;
+        final studentId = (authState is AuthAuthenticated) ? authState.userId : null;
+        if (studentId == null) throw Exception("User not authenticated");
         final eventRepo = context.read<DiContainer>().repositories.eventRepository;
         await eventRepo.sendEvent(
+          studentId: studentId,
           eventType: 'QUIZ_SUBMIT',
           metadata: {'step_id': widget.stepId, 'concept_id': widget.conceptId, 'is_correct': passed, 'score': score},
         );

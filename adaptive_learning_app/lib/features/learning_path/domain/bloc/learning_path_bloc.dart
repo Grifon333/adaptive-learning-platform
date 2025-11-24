@@ -15,30 +15,31 @@ class LearningPathBloc extends Bloc<LearningPathEvent, LearningPathState> {
   }
 
   final ILearningPathRepository _repository;
-  // TODO: Replace with actual student ID retrieval logic
-  final String _studentId = "d3172e75-37c3-4eac-8800-a298f9e61840";
-
   String? _lastGoalId;
   String? _lastStartId;
+  String? _currentStudentId;
 
   Future<void> _onGeneratePath(GeneratePathRequested event, Emitter<LearningPathState> emit) async {
     _lastGoalId = event.goalConceptId;
     _lastStartId = event.startConceptId;
+    _currentStudentId = event.studentId;
     await _loadPath(emit);
   }
 
   Future<void> _onRefreshPath(LearningPathRefreshRequested event, Emitter<LearningPathState> emit) async {
     if (_lastGoalId == null) return;
+    _currentStudentId = event.studentId;
     await _loadPath(emit);
   }
 
   Future<void> _loadPath(Emitter<LearningPathState> emit) async {
+    if (_currentStudentId == null) return;
     emit(LearningPathLoading());
     try {
       // The backend (LearningPathService) checks the mastery_level in the ML service for each request,
       // so re-generation will return steps with updated statuses (completed/pending).
       final path = await _repository.generatePath(
-        studentId: _studentId,
+        studentId: _currentStudentId!,
         startConceptId: _lastStartId,
         goalConceptId: _lastGoalId!,
       );

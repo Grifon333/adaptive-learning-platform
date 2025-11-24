@@ -1,3 +1,4 @@
+import 'package:adaptive_learning_app/features/auth/domain/bloc/auth_bloc.dart';
 import 'package:adaptive_learning_app/features/learning_path/data/dto/learning_path_dtos.dart';
 import 'package:adaptive_learning_app/features/learning_path/domain/bloc/learning_path_bloc.dart';
 import 'package:flutter/material.dart';
@@ -147,11 +148,14 @@ class _StepCard extends StatelessWidget {
                 // But we know we need to check.
                 // The easiest way is to reload the path.
                 // In a real application, this can be optimized.
+                final authState = context.read<AuthBloc>().state;
+                final studentId = (authState is AuthAuthenticated) ? authState.userId : '';
                 if (context.mounted) {
                   // Here we assume that we have access to the current IDs.
                   // Or simpler: just refresh the screen or add an event to BLoC
                   // context.read<LearningPathBloc>().add(RefreshPathEvent(...));
                   // For now, the user can click "Back" and re-enter, or we will add auto-refresh.
+                  context.read<LearningPathBloc>().add(LearningPathRefreshRequested(studentId));
                 }
               },
       ),
