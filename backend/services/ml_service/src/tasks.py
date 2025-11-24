@@ -17,37 +17,31 @@ def process_student_interaction(student_id: str, concept_id: str, is_correct: bo
     logger.info(f"ML Worker: Processing interaction for student {student_id}")
     logger.info(f"   Concept: {concept_id}, Correct: {is_correct}")
 
-    # --- 1. EMULATE DKT PREDICTION ---
-    # In a real system, here we would query the database for the student's history
-
-    # Create a fake input tensor (batch_size=1, seq_len=1)
-    # Just to verify that PyTorch is functioning
-    dummy_input = torch.tensor([[1]])
-    with torch.no_grad():
-        prediction = model(dummy_input)
-
-    # Get the "prediction" (just a number between 0 and 1)
-    predicted_mastery = prediction[0, 0, 0].item()
-
-    # Adjustment logic: if the answer is correct, skill should increase; if not, it should decrease.
-    # Until the model is trained, we will add simple heuristics to the prediction.
+    # --- 1. Simplified logic (Heuristic DKT) ---
+    # In a real system, there will be:
+    # history = db.get_user_history(student_id)
+    # prediction = model(history)
     if is_correct:
-        final_mastery = min(1.0, predicted_mastery + 0.1)
+        final_mastery = 0.95
+        confidence = 0.8
     else:
-        final_mastery = max(0.0, predicted_mastery - 0.1)
+        final_mastery = 0.3
+        confidence = 0.5
 
-    logger.success(f"Prediction: {predicted_mastery:.4f} -> Adjusted: {final_mastery:.4f}")
+    logger.success(f"Updated State: Concept {concept_id} -> Mastery {final_mastery}")
 
-    # --- 2. Save to DB ---
+    # --- 2. Збереження в PostgreSQL ---
     try:
+        # Ця функція вже реалізована в src/database.py і робить UPSERT
         update_knowledge_state(student_id, concept_id, final_mastery)
     except Exception as e:
         logger.error(f"Failed to save state: {e}")
-        # Celery retry logic can be added here
+        # self.retry() for Celery
+        raise e
 
     return {
         "student_id": student_id,
         "concept_id": concept_id,
-        "new_mastery": predicted_mastery,
+        "new_mastery": final_mastery,
         "status": "saved"
     }
