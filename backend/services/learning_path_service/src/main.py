@@ -1,5 +1,6 @@
 import uuid
 from contextlib import asynccontextmanager
+from typing import cast
 
 import httpx
 from fastapi import Depends, FastAPI, Header, HTTPException, status
@@ -62,22 +63,28 @@ async def _fetch_kg_path(
         ) from e
 
 
-async def _get_mastery_level(
-    client: httpx.AsyncClient, student_id: str, concept_id: str
-) -> float:
+async def _get_mastery_batch(
+    client: httpx.AsyncClient, student_id: str, concept_ids: list[str]
+) -> dict[str, float]:
     """
-    Obtains the student's level of knowledge of the ML service.
+    Fetches mastery levels for multiple concepts in ONE request.
+    Returns: {concept_id: mastery_level}
     """
+    if not concept_ids:
+        return {}
+
     try:
-        ml_url = f"{config.settings.ML_SERVICE_URL}/api/v1/predict"
+        ml_url = f"{config.settings.ML_SERVICE_URL}/api/v1/predict/batch"
         ml_response = await client.post(
-            ml_url, json={"student_id": student_id, "concept_id": concept_id}
+            ml_url, json={"student_id": student_id, "concept_ids": concept_ids}
         )
-        ml_data = ml_response.json()
-        return float(ml_data.get("mastery_level", 0.0))
+        ml_response.raise_for_status()
+        data = ml_response.json().get("mastery_map", {})
+        return cast(dict[str, float], data)
     except Exception as e:
-        logger.error(f"Failed to query ML service for {concept_id}: {e}")
-        return 0.0
+        logger.error(f"Failed to query ML service batch: {e}")
+        # Fallback: assume zero knowledge on error to allow path generation
+        return {cid: 0.0 for cid in concept_ids}
 
 
 async def _save_path_to_user_service(
@@ -120,7 +127,7 @@ async def _save_path_to_user_service(
     status_code=status.HTTP_201_CREATED,
 )
 async def create_learning_path(
-    student_id: str,
+    student_id: uuid.UUID,
     request: schemas.LearningPathCreateRequest,
     authorization: str | None = Header(None),
     client: httpx.AsyncClient = Depends(get_http_client),
@@ -134,6 +141,7 @@ async def create_learning_path(
     5. Returns the saved route to the client.
     """
     logger.info(f"Received path request for student {student_id}...")
+    str_student_id = str(student_id)
 
     if authorization is None:
         raise HTTPException(status_code=401, detail="Authorization header missing")
@@ -149,13 +157,16 @@ async def create_learning_path(
     # 2. Apply Adaptive Logic (Transform Loop)
     logger.info("Applying adaptive filtering based on ML predictions...")
 
+    all_concept_ids = [c.id for c in kgs_data.path]
+    mastery_map = await _get_mastery_batch(client, str_student_id, all_concept_ids)
+
     us_steps = []
     total_time = 0
     current_step_num = 1
 
     for concept in kgs_data.path:
         # 2.1 Ask the ML service about the student's level of knowledge of this concept.
-        mastery_level = await _get_mastery_level(client, student_id, concept.id)
+        mastery_level = mastery_map.get(concept.id, 0.0)
         logger.info(
             f"Concept {concept.name} ({concept.id[:8]}...): Mastery {mastery_level:.2f}"
         )

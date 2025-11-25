@@ -1,5 +1,5 @@
-import uuid
 from typing import Any
+from uuid import UUID
 
 from pydantic import BaseModel
 
@@ -59,7 +59,7 @@ class USLearningPathCreate(BaseModel):
 
 
 class LearningStep(BaseModel):
-    id: uuid.UUID
+    id: UUID
     step_number: int
     concept_id: str
     resources: list[dict[str, Any]]
@@ -71,8 +71,8 @@ class LearningStep(BaseModel):
 
 
 class LearningPathResponse(BaseModel):
-    id: uuid.UUID
-    student_id: uuid.UUID
+    id: UUID
+    student_id: UUID
     goal_concepts: list[str]
     status: str
     completion_percentage: float

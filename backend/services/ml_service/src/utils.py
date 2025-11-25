@@ -15,4 +15,4 @@ CONCEPT_TO_INDEX = {
 }
 
 def get_concept_index(concept_id: str) -> int:
-    return CONCEPT_TO_INDEX.get(concept_id, 0) # Default to 0 if unknown
+    return CONCEPT_TO_INDEX.get(concept_id, 0)
