@@ -42,4 +42,46 @@ final class LearningPathRepository implements ILearningPathRepository {
     final list = data['questions'] as List;
     return list.map((e) => QuizQuestionDto.fromJson(e)).toList();
   }
+
+  @override
+  Future<List<Map<String, dynamic>>> getAvailablePaths() async {
+    await Future.delayed(const Duration(milliseconds: 300)); // Simulating a network delay
+
+    // Mock data moved from UI to Data Layer
+    return [
+      {
+        'title': 'Python Basics',
+        'description': 'Learn the basics of syntax, variables, and loops.',
+        'startNodeId': 'ff9eecf7-81fc-489d-9e8e-2f6360595f02', // Stored in Backend Seed!
+        'endNodeId': 'de53b2dd-b583-4d9c-a190-65e83b26c2b6',
+        'progress': 0.45,
+        'status': 'In Progress',
+        'icon': '🐍',
+        'stepsCount': 12,
+        'completedSteps': 5,
+      },
+      {
+        'title': 'Data Science Intro',
+        'description': 'Introduction to data analysis and machine learning.',
+        'startNodeId': null,
+        'endNodeId': 'de53b2dd-b583-4d9c-a190-65e83b26c2b6',
+        'progress': 0.10,
+        'status': 'Started',
+        'icon': '📊',
+        'stepsCount': 20,
+        'completedSteps': 2,
+      },
+      {
+        'title': 'Flutter Masterclass',
+        'description': 'Creating complex interfaces and state management.',
+        'startNodeId': null,
+        'endNodeId': '9a4c9a78-eca9-4395-8798-3f0956f95fad', // Stored in Backend Seed!
+        'progress': 0.0,
+        'status': 'Not Started',
+        'icon': '💙',
+        'stepsCount': 15,
+        'completedSteps': 0,
+      },
+    ];
+  }
 }

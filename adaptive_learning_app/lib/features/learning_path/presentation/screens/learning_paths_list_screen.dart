@@ -1,48 +1,25 @@
+import 'package:adaptive_learning_app/di/di_container.dart';
 import 'package:adaptive_learning_app/features/auth/domain/bloc/auth_bloc.dart';
 import 'package:adaptive_learning_app/features/learning_path/domain/bloc/learning_path_bloc.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
-class LearningPathsListScreen extends StatelessWidget {
+class LearningPathsListScreen extends StatefulWidget {
   const LearningPathsListScreen({super.key});
 
-  // Mock data that combines information about the path and parameters for its generation
-  static const List<Map<String, dynamic>> _availablePaths = [
-    {
-      'title': 'Python Basics',
-      'description': 'Learn the basics of syntax, variables, and loops.',
-      'startNodeId': 'ff9eecf7-81fc-489d-9e8e-2f6360595f02',
-      'endNodeId': 'de53b2dd-b583-4d9c-a190-65e83b26c2b6',
-      'progress': 0.45,
-      'status': 'In Progress',
-      'icon': '🐍',
-      'stepsCount': 12,
-      'completedSteps': 5,
-    },
-    {
-      'title': 'Data Science Intro',
-      'description': 'Introduction to data analysis and machine learning.',
-      'startNodeId': null,
-      'endNodeId': '9a4c9a78-eca9-4395-8798-3f0956f95fad',
-      'progress': 0.10,
-      'status': 'Started',
-      'icon': '📊',
-      'stepsCount': 20,
-      'completedSteps': 2,
-    },
-    {
-      'title': 'Flutter Masterclass',
-      'description': 'Creating complex interfaces and state management.',
-      'startNodeId': null,
-      'endNodeId': '9a4c9a78-eca9-4395-8798-3f0956f95fad',
-      'progress': 0.0,
-      'status': 'Not Started',
-      'icon': '💙',
-      'stepsCount': 15,
-      'completedSteps': 0,
-    },
-  ];
+  @override
+  State<LearningPathsListScreen> createState() => _LearningPathsListScreenState();
+}
+
+class _LearningPathsListScreenState extends State<LearningPathsListScreen> {
+  late Future<List<Map<String, dynamic>>> _pathsFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _pathsFuture = context.read<DiContainer>().repositories.learningPathRepository.getAvailablePaths();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -53,13 +30,26 @@ class LearningPathsListScreen extends StatelessWidget {
         label: const Text('Create'),
         icon: const Icon(Icons.add),
       ),
-      body: ListView.separated(
-        padding: const EdgeInsets.all(16),
-        itemCount: _availablePaths.length,
-        separatorBuilder: (ctx, index) => const SizedBox(height: 16),
-        itemBuilder: (context, index) {
-          final path = _availablePaths[index];
-          return _PathCard(path: path);
+      body: FutureBuilder<List<Map<String, dynamic>>>(
+        future: _pathsFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError) return Center(child: Text('Error loading paths: ${snapshot.error}'));
+
+          final paths = snapshot.data ?? [];
+          if (paths.isEmpty) return const Center(child: Text('No active paths found.'));
+
+          return ListView.separated(
+            padding: const EdgeInsets.all(16),
+            itemCount: paths.length,
+            separatorBuilder: (ctx, index) => const SizedBox(height: 16),
+            itemBuilder: (context, index) {
+              final path = paths[index];
+              return _PathCard(path: path);
+            },
+          );
         },
       ),
     );
