@@ -184,6 +184,23 @@ services:
     networks:
       - adaptive_network
 
+  event_worker:
+    build:
+      context: ./backend/services/event_service
+    container_name: alp_event_worker
+    restart: unless-stopped
+    command: ["poetry", "run", "celery", "-A", "src.celery_app", "worker", "--loglevel=info", "-Q", "event_queue"]
+    environment:
+      - MONGODB_URL=mongodb://mongodb:27017
+      - MONGODB_DB_NAME=${MONGODB_DB_NAME}
+      - REDIS_URL=redis://redis:6379/0
+      - LOG_LEVEL=INFO
+    depends_on:
+      - redis
+      - mongodb
+    networks:
+      - adaptive_network
+
 volumes:
   postgres_data:
   neo4j_data:

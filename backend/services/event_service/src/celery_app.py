@@ -3,9 +3,10 @@ from .config import settings
 
 # Create a Celery instance just for sending tasks
 celery_app = Celery(
-    "event_producer",
+    "event_service",
     broker=settings.REDIS_URL,
-    backend=settings.REDIS_URL
+    backend=settings.REDIS_URL,
+    include=["src.tasks"]
 )
 
 celery_app.conf.update(
@@ -14,4 +15,5 @@ celery_app.conf.update(
     result_serializer="json",
     timezone="UTC",
     enable_utc=True,
+    task_default_queue="event_queue", # Separate queue for events
 )
