@@ -76,6 +76,45 @@ class _StepCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final isCompleted = step.status == 'completed';
 
+    if (step.isRemedial) {
+      return Container(
+        margin: const EdgeInsets.only(left: 32, bottom: 8, top: 8),
+        child: Card(
+          elevation: isLocked ? 0 : 4,
+          color: isLocked ? Colors.grey.shade50 : Colors.orange.shade50,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(color: Colors.orange.shade200),
+          ),
+          child: ListTile(
+            contentPadding: const EdgeInsets.all(16),
+            leading: CircleAvatar(
+              backgroundColor: Colors.orange.shade100,
+              child: const Icon(Icons.refresh, color: Colors.orange),
+            ),
+            title: const Text(
+              'Review Required',
+              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.brown),
+            ),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 4),
+                Text(
+                  step.description ?? 'Please review this topic to improve mastery.',
+                  style: TextStyle(color: Colors.brown.shade600),
+                ),
+              ],
+            ),
+            trailing: isCompleted
+                ? const Icon(Icons.check_circle, color: Colors.green)
+                : const Icon(Icons.arrow_forward, color: Colors.orange),
+            onTap: isLocked ? null : () => _onStepTap(context),
+          ),
+        ),
+      );
+    }
+
     Color cardColor = Colors.white;
     Color textColor = Colors.black;
     IconData trailingIcon = Icons.lock;
@@ -139,26 +178,22 @@ class _StepCard extends StatelessWidget {
                   context,
                 ).showSnackBar(const SnackBar(content: Text('Complete the previous step to unlock this one!')));
               }
-            : () async {
-                // Transition to the lesson
-                await context.pushNamed('lesson', extra: step);
-
-                // STATUS UPDATE:
-                // When we return from class, we don't know if the student passed the test.
-                // But we know we need to check.
-                // The easiest way is to reload the path.
-                // In a real application, this can be optimized.
-                final authState = context.read<AuthBloc>().state;
-                final studentId = (authState is AuthAuthenticated) ? authState.userId : '';
-                if (context.mounted) {
-                  // Here we assume that we have access to the current IDs.
-                  // Or simpler: just refresh the screen or add an event to BLoC
-                  // context.read<LearningPathBloc>().add(RefreshPathEvent(...));
-                  // For now, the user can click "Back" and re-enter, or we will add auto-refresh.
-                  context.read<LearningPathBloc>().add(LearningPathRefreshRequested(studentId));
-                }
-              },
+            : () => _onStepTap(context),
       ),
     );
+  }
+
+  void _onStepTap(BuildContext context) async {
+    await context.pushNamed('lesson', extra: step);
+    if (context.mounted) {
+      // STATUS UPDATE:
+      // When we return from class, we don't know if the student passed the test.
+      // But we know we need to check.
+      // The easiest way is to reload the path.
+      // In a real application, this can be optimized.
+      final authState = context.read<AuthBloc>().state;
+      final studentId = (authState is AuthAuthenticated) ? authState.userId : '';
+      context.read<LearningPathBloc>().add(LearningPathRefreshRequested(studentId));
+    }
   }
 }

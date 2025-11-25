@@ -223,6 +223,8 @@ def create_learning_path(
             estimated_time=step_data.estimated_time,
             difficulty=step_data.difficulty,
             status=step_data.status,
+            is_remedial=step_data.is_remedial,
+            description=step_data.description,
         )
         db_steps.append(db_step)
     db.add_all(db_steps)

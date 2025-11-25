@@ -129,6 +129,8 @@ class LearningStep(Base):
     score = Column(Float, nullable=True)  # Test/quiz score
     started_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
+    is_remedial = Column(Boolean, default=False)
+    description = Column(String(500), nullable=True)
 
     path = relationship("LearningPath", back_populates="steps")
 
