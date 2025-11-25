@@ -1,5 +1,6 @@
 import 'package:adaptive_learning_app/features/auth/domain/bloc/auth_bloc.dart';
 import 'package:adaptive_learning_app/features/learning_path/data/dto/learning_path_dtos.dart';
+import 'package:adaptive_learning_app/features/learning_path/data/dto/learning_path_extensions.dart';
 import 'package:adaptive_learning_app/features/learning_path/domain/bloc/learning_path_bloc.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -27,23 +28,14 @@ class LearningPathScreen extends StatelessWidget {
             return ListView.separated(
               padding: const EdgeInsets.all(16),
               itemCount: steps.length,
-              separatorBuilder: (ctx, index) => _ConnectorLine(isActive: steps[index].status == 'completed'),
+              separatorBuilder: (ctx, index) => _ConnectorLine(isActive: steps[index].isCompleted),
               itemBuilder: (context, index) {
                 final step = steps[index];
-
-                // BLOCKING LOGIC:
-                // Step is available if:
-                // 1. It is the first step (index == 0)
-                // 2. OR the previous step has the status 'completed'
-                final bool isFirst = index == 0;
-                final bool isPreviousCompleted = isFirst ? true : steps[index - 1].status == 'completed';
-                final bool isLocked = !isPreviousCompleted;
-
-                return _StepCard(step: step, isLocked: isLocked);
+                return _StepCard(step: step, isLocked: step.isLocked(steps));
               },
             );
           }
-          return const Center(child: Text('Оберіть ціль навчання'));
+          return const Center(child: Text('Select a learning goal'));
         },
       ),
     );
@@ -74,7 +66,7 @@ class _StepCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isCompleted = step.status == 'completed';
+    final isCompleted = step.isCompleted;
 
     if (step.isRemedial) {
       return Container(
@@ -153,7 +145,7 @@ class _StepCard extends StatelessWidget {
           ),
         ),
         title: Text(
-          'Крок ${step.stepNumber}',
+          'Step ${step.stepNumber}',
           style: TextStyle(fontWeight: FontWeight.bold, color: textColor),
         ),
         subtitle: Column(
@@ -166,7 +158,7 @@ class _StepCard extends StatelessWidget {
             ),
             if (!isLocked) ...[
               const SizedBox(height: 4),
-              Text('${step.resources.length} матеріалів', style: const TextStyle(fontSize: 12)),
+              Text('${step.resources.length} materials', style: const TextStyle(fontSize: 12)),
             ],
           ],
         ),
