@@ -2,76 +2,58 @@ from sqlalchemy import create_engine, text
 from .config import settings
 from loguru import logger
 
-engine = create_engine(settings.DATABASE_URL, pool_pre_ping=True)
+engine = create_engine(settings.DATABASE_URL, pool_pre_ping=True, pool_size=20, max_overflow=10)
 
 def update_knowledge_state(student_id: str, concept_id: str, mastery_level: float):
     """
-    Updates or creates a record of the student's knowledge status.
+    Thread-safe UPSERT using PostgreSQL ON CONFLICT.
     """
+    # Using parameterized SQL for security
     query = text("""
         INSERT INTO knowledge_states (student_id, concept_id, mastery_level, updated_at, confidence)
         VALUES (:student_id, :concept_id, :mastery, NOW(), 0.5)
-        ON CONFLICT (id) DO UPDATE
-        SET mastery_level = :mastery,
+        ON CONFLICT (student_id, concept_id)
+        DO UPDATE SET
+            mastery_level = EXCLUDED.mastery_level,
             updated_at = NOW();
     """)
 
-    # Note: We do not have a unique key (student_id, concept_id) in the knowledge_states table
-    # in the current create script (there is id SERIAL PRIMARY KEY).
-    # Therefore, we will first check if the record exists and update it, or create a new one.
+    try:
+        with engine.begin() as conn:
+            conn.execute(query, {
+                "student_id": student_id,
+                "concept_id": concept_id,
+                "mastery": mastery_level
+            })
+            logger.info(f"Upserted mastery for {student_id}/{concept_id}")
+    except Exception as e:
+        logger.error(f"DB Error during upsert: {e}")
+        raise
 
-    check_query = text("""
-        SELECT id FROM knowledge_states
-        WHERE student_id = :student_id AND concept_id = :concept_id
-    """)
+def get_knowledge_states_batch(student_id: str, concept_ids: list[str]) -> dict[str, float]:
+    """
+    Batch retrieval of mastery levels. Returns dict {concept_id: mastery}.
+    """
+    if not concept_ids:
+        return {}
 
-    update_query = text("""
-        UPDATE knowledge_states
-        SET mastery_level = :mastery, updated_at = NOW()
-        WHERE id = :pk
-    """)
-
-    insert_query = text("""
-        INSERT INTO knowledge_states (student_id, concept_id, mastery_level, updated_at, confidence)
-        VALUES (:student_id, :concept_id, :mastery, NOW(), 0.5)
+    query = text("""
+        SELECT concept_id, mastery_level
+        FROM knowledge_states
+        WHERE student_id = :student_id AND concept_id = ANY(:concept_ids)
     """)
 
     try:
-        with engine.begin() as conn: # begin() automatically commits
-            result = conn.execute(check_query, {"student_id": student_id, "concept_id": concept_id}).fetchone()
-
-            if result:
-                conn.execute(update_query, {"mastery": mastery_level, "pk": result[0]})
-                logger.info(f"Updated mastery for student {student_id}, concept {concept_id}")
-            else:
-                conn.execute(insert_query, {
-                    "student_id": student_id,
-                    "concept_id": concept_id,
-                    "mastery": mastery_level
-                })
-                logger.info(f"Created mastery record for student {student_id}, concept {concept_id}")
-
+        with engine.connect() as conn:
+            result = conn.execute(query, {
+                "student_id": student_id,
+                "concept_ids": concept_ids
+            }).fetchall()
+            found_states = {row[0]: row[1] for row in result}
+            return {cid: found_states.get(cid, 0.0) for cid in concept_ids}
     except Exception as e:
-        logger.error(f"DB Error: {e}")
-        raise
-
-
-def get_knowledge_state(student_id: str, concept_id: str):
-    """
-    Receives the current state of knowledge from the database.
-    """
-    query = text("""
-        SELECT mastery_level, confidence
-        FROM knowledge_states
-        WHERE student_id = :student_id AND concept_id = :concept_id
-    """)
-
-    with engine.connect() as conn:
-        result = conn.execute(query, {"student_id": student_id, "concept_id": concept_id}).fetchone()
-        if result:
-            return {"mastery_level": result[0], "confidence": result[1]}
-        else:
-            return {"mastery_level": 0.0, "confidence": 0.0}
+        logger.error(f"DB Error batch fetch: {e}")
+        return {cid: 0.0 for cid in concept_ids}
 
 
 def get_all_student_knowledge(student_id: str):
@@ -84,6 +66,10 @@ def get_all_student_knowledge(student_id: str):
         WHERE student_id = :student_id
     """)
 
-    with engine.connect() as conn:
-        result = conn.execute(query, {"student_id": student_id}).fetchall()
-        return {row[0]: row[1] for row in result}
+    try:
+        with engine.connect() as conn:
+            result = conn.execute(query, {"student_id": student_id}).fetchall()
+            return {row[0]: row[1] for row in result}
+    except Exception as e:
+        logger.error(f"DB Error fetch all: {e}")
+        return {}
