@@ -136,11 +136,7 @@ async def create_learning_path(
     logger.info(f"Received path request for student {student_id}...")
 
     if authorization is None:
-        logger.warning("Authorization header missing")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authorization header missing",
-        )
+        raise HTTPException(status_code=401, detail="Authorization header missing")
 
     # 1. Get Raw Path from KGS
     kgs_data = await _fetch_kg_path(
@@ -148,47 +144,101 @@ async def create_learning_path(
     )
 
     if not kgs_data.path:
-        logger.warning("KGS returned an empty path.")
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No path found between the specified concepts",
-        )
+        raise HTTPException(status_code=404, detail="No path found")
 
     # 2. Apply Adaptive Logic (Transform Loop)
     logger.info("Applying adaptive filtering based on ML predictions...")
 
     us_steps = []
     total_time = 0
+    current_step_num = 1
 
-    for i, concept in enumerate(kgs_data.path):
+    for concept in kgs_data.path:
         # 2.1 Ask the ML service about the student's level of knowledge of this concept.
         mastery_level = await _get_mastery_level(client, student_id, concept.id)
+        logger.info(
+            f"Concept {concept.name} ({concept.id[:8]}...): Mastery {mastery_level:.2f}"
+        )
 
-        # 2.2 Skip logic
-        step_status = "pending"
-        if mastery_level > 0.8:
-            logger.info(
-                f"Auto-completing concept {concept.id} (Mastery: {mastery_level:.2f})"
-            )
-            step_status = "completed"
-
-        # 2.3 Remedial logic (Repetition)
-        # Here maybe add a check: if it is a difficult topic (difficulty > 8) and mastery < 0.3,
-        # add an additional preparation step.
-
-        # 3.4 Step formation
         resources_payload = [res.model_dump() for res in concept.resources]
 
+        # --- LOGIC BRANCHING ---
+
+        # A. High level of knowledge -> Auto-complete
+        if mastery_level > 0.8:
+            us_steps.append(
+                schemas.USLearningStepCreate(
+                    step_number=current_step_num,
+                    concept_id=concept.id,
+                    resources=resources_payload,
+                    estimated_time=concept.estimated_time,
+                    difficulty=concept.difficulty,
+                    status="completed",
+                )
+            )
+            current_step_num += 1
+            total_time += concept.estimated_time
+            continue
+
+        # B. Remedial Logic (Struggling: 0.0 < Mastery < 0.6)
+        if 0.0 < mastery_level < 0.6:
+            logger.warning(
+                f"Struggle detected on {concept.name}. Generating Remedial Step."
+            )
+
+            # --- 1. REMEDIAL STEP (Additional step) ---
+
+            # AI TODO: Here, we will refer to Gemini in the future:
+            # reason = await ai_service.analyze_error(student_id, concept.id)
+            ai_instruction = (
+                f"Review the material on '{concept.name}' again. Focus on the basics."
+            )
+
+            us_steps.append(
+                schemas.USLearningStepCreate(
+                    step_number=current_step_num,  # The number is the same as the main one (hide it visually)
+                    concept_id=concept.id,
+                    resources=resources_payload,  # Maybe only give part of the resources or others
+                    estimated_time=int(concept.estimated_time * 0.5),
+                    difficulty=concept.difficulty * 0.7,
+                    status="pending",
+                    is_remedial=True,  # Flag for visualization
+                    description=ai_instruction,  # Reason
+                )
+            )
+            total_time += int(concept.estimated_time * 0.5)
+
+            # --- 2. MAIN STEP (Main step) ---
+            # He follows suit, but he is blocked (pending) until we pass remedial.
+
+            us_steps.append(
+                schemas.USLearningStepCreate(
+                    step_number=current_step_num,
+                    concept_id=concept.id,
+                    resources=resources_payload,
+                    estimated_time=concept.estimated_time,
+                    difficulty=concept.difficulty,
+                    status="pending",  # Awaiting remedial
+                    is_remedial=False,
+                    description=concept.description,
+                )
+            )
+            current_step_num += 1
+            total_time += concept.estimated_time
+            continue
+
+        # C. Regular step (or the one following Remedial)
         us_steps.append(
             schemas.USLearningStepCreate(
-                step_number=i + 1,
+                step_number=current_step_num,
                 concept_id=concept.id,
                 resources=resources_payload,
                 estimated_time=concept.estimated_time,
                 difficulty=concept.difficulty,
-                status=step_status,
+                status="pending",
             )
         )
+        current_step_num += 1
         total_time += concept.estimated_time
 
     if not us_steps:
@@ -208,7 +258,7 @@ async def create_learning_path(
         client, us_path_data, {"Authorization": authorization}
     )
 
-    logger.success(f"Successfully created and saved path {final_path.id}")
+    logger.success(f"Path adapted and saved. Total steps: {len(us_steps)}")
     return final_path
 
 

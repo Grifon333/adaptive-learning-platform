@@ -58,6 +58,8 @@ class LearningStepCreate(BaseModel):
     estimated_time: int | None = None
     difficulty: float | None = None
     status: str = "pending"
+    is_remedial: bool = False
+    description: str | None = None
 
 
 class LearningPathCreate(BaseModel):
@@ -77,6 +79,8 @@ class LearningStep(BaseModel):
     score: float | None = None
     estimated_time: int | None = None
     difficulty: float | None = None
+    is_remedial: bool
+    description: str | None = None
 
 
 class LearningPath(BaseModel):

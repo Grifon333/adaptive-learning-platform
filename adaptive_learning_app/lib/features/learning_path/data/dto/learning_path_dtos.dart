@@ -76,6 +76,8 @@ class LearningStepDto {
     required this.resources,
     this.estimatedTime,
     this.difficulty,
+    this.isRemedial = false,
+    this.description,
   });
 
   final String id;
@@ -85,6 +87,8 @@ class LearningStepDto {
   final List<ResourceDto> resources;
   final int? estimatedTime;
   final double? difficulty;
+  final bool isRemedial;
+  final String? description;
 
   factory LearningStepDto.fromJson(Map<String, dynamic> json) {
     return LearningStepDto(
@@ -95,6 +99,8 @@ class LearningStepDto {
       resources: (json['resources'] as List).map((e) => ResourceDto.fromJson(e as Map<String, dynamic>)).toList(),
       estimatedTime: json['estimated_time'] as int?,
       difficulty: (json['difficulty'] as num?)?.toDouble(),
+      isRemedial: json['is_remedial'] as bool? ?? false,
+      description: json['description'] as String?,
     );
   }
 }
