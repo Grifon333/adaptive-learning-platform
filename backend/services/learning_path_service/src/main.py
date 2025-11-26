@@ -186,6 +186,39 @@ async def create_learning_path(
 
 
 @app.get(
+    "/api/v1/students/{student_id}/learning-paths",
+    response_model=list[schemas.LearningPathResponse],
+)
+async def get_student_learning_paths(
+    student_id: str,
+    authorization: str | None = Header(None),
+    client: httpx.AsyncClient = Depends(get_http_client),
+):
+    """
+    Retrieves all learning paths for a specific student from User Service.
+    """
+    us_url = f"{config.settings.USER_SERVICE_URL}/api/v1/students/{student_id}/learning-paths"
+
+    try:
+        logger.info(f"Fetching paths from User Service: {us_url}")
+        us_response = await client.get(
+            us_url, headers={"Authorization": authorization} if authorization else {}
+        )
+        us_response.raise_for_status()
+        return us_response.json()
+    except httpx.HTTPStatusError as e:
+        logger.error(f"User Service error: {e.response.text}")
+        if e.response.status_code == 404:
+            return []
+        raise HTTPException(
+            status_code=e.response.status_code, detail="Failed to fetch paths"
+        ) from e
+    except Exception as e:
+        logger.error(f"Connection error: {e}")
+        raise HTTPException(status_code=500, detail="User Service unavailable") from e
+
+
+@app.get(
     "/api/v1/students/{student_id}/recommendations",
     response_model=schemas.RecommendationResponse,
 )

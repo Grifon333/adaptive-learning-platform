@@ -204,42 +204,75 @@ def create_learning_path(
     """
     logger.info(f"Creating learning path for user {current_user.email}")
 
-    # 1. Creating the main LearningPath record
-    db_path = models.LearningPath(
-        student_id=current_user.id,
-        goal_concepts=path_data.goal_concepts,
-        estimated_time=path_data.estimated_time,
-    )
-    db.add(db_path)
-
-    # 2. Creating steps (LearningStep)
-    db_steps = []
-    for step_data in path_data.steps:
-        db_step = models.LearningStep(
-            path=db_path,
-            step_number=step_data.step_number,
-            concept_id=step_data.concept_id,
-            resources=step_data.resources,
-            estimated_time=step_data.estimated_time,
-            difficulty=step_data.difficulty,
-            status=step_data.status,
-            is_remedial=step_data.is_remedial,
-            description=step_data.description,
-        )
-        db_steps.append(db_step)
-    db.add_all(db_steps)
-
     try:
+        # 1. Archive old paths for the same goal(s)
+        # Assume that if the goal is the same, then this is a trajectory update.
+        # path_data.goal_concepts - list of target IDs.
+
+        # Find active paths for this student
+        active_paths = (
+            db.query(models.LearningPath)
+            .filter(
+                models.LearningPath.student_id == current_user.id,
+                models.LearningPath.status == "active",
+            )
+            .all()
+        )
+
+        for existing_path in active_paths:
+            # Check whether the goals intersect (is this the path to the same goal?)
+            existing_goals = set(existing_path.goal_concepts)
+            new_goals = set(path_data.goal_concepts)
+
+            if not existing_goals.isdisjoint(new_goals):
+                logger.info(f"Archiving old path {existing_path.id} (Goal overlap)")
+                existing_path.status = "archived"
+                db.add(existing_path)
+
+        # Committing updates to old paths before creating new one
+        db.commit()
+
+        # 2. Creating the main LearningPath record
+        db_path = models.LearningPath(
+            student_id=current_user.id,
+            goal_concepts=path_data.goal_concepts,
+            estimated_time=path_data.estimated_time,
+            status="active",  # Explicitly active
+        )
+        db.add(db_path)
+
+        # Flush to get the ID
+        db.flush()
+
+        # 3. Creating steps (LearningStep)
+        db_steps = []
+        for step_data in path_data.steps:
+            db_step = models.LearningStep(
+                path_id=db_path.id,  # Using ID after flush
+                step_number=step_data.step_number,
+                concept_id=step_data.concept_id,
+                resources=step_data.resources,
+                estimated_time=step_data.estimated_time,
+                difficulty=step_data.difficulty,
+                status=step_data.status,
+                is_remedial=step_data.is_remedial,
+                description=step_data.description,
+            )
+            db_steps.append(db_step)
+        db.add_all(db_steps)
+
         db.commit()
         db.refresh(db_path)
+
         logger.success(f"Learning path {db_path.id} created successfully.")
         return db_path
+
     except Exception as e:
         db.rollback()
         logger.error(f"Failed to create learning path: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to create learning path",
+            detail=f"Failed to create learning path: {str(e)}",
         ) from e
 
 
@@ -277,3 +310,30 @@ def refresh_access_token(
         "refresh_token": new_refresh_token,
         "token_type": "bearer",
     }
+
+
+@app.get(
+    "/api/v1/students/{student_id}/learning-paths",
+    response_model=list[schemas.LearningPath],
+)
+def get_student_paths(
+    student_id: str,  # UUID str
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    if str(current_user.id) != student_id:
+        raise HTTPException(
+            status_code=403, detail="Not authorized to view these paths"
+        )
+    # Filter: return only ACTIVE or COMPLETED.
+    # ARCHIVED hide.
+    paths = (
+        db.query(models.LearningPath)
+        .filter(
+            models.LearningPath.student_id == student_id,
+            models.LearningPath.status.in_(["active", "completed"]),
+        )
+        .order_by(models.LearningPath.created_at.desc())
+        .all()
+    )
+    return paths

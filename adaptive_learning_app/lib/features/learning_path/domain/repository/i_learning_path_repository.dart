@@ -13,5 +13,5 @@ abstract interface class ILearningPathRepository with DiBaseRepository {
 
   Future<List<QuizQuestionDto>> getQuizForConcept(String conceptId);
 
-  Future<List<Map<String, dynamic>>> getAvailablePaths();
+  Future<List<LearningPathDto>> getAvailablePaths(String studentId);
 }

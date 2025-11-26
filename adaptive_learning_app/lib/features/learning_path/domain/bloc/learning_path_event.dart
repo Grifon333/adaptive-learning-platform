@@ -21,3 +21,10 @@ class LearningPathRefreshRequested extends LearningPathEvent {
   const LearningPathRefreshRequested(this.studentId);
   final String studentId;
 }
+
+class SelectExistingPath extends LearningPathEvent {
+  const SelectExistingPath(this.path);
+  final LearningPathDto path;
+  @override
+  List<Object?> get props => [path];
+}

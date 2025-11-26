@@ -18,11 +18,12 @@ class _ConceptSelectorScreenState extends State<ConceptSelectorScreen> {
   // List of available concepts (in reality - loaded from the API)
   final List<Map<String, String>> _concepts = [
     {'id': 'ff9eecf7-81fc-489d-9e8e-2f6360595f02', 'name': 'Python Basics'},
-    {'id': 'de53b2dd-b583-4d9c-a190-65e83b26c2b6', 'name': 'Data Science Intro'},
-    {'id': '21c3597d-b920-494f-b862-1f6da27da305', 'name': 'Dart Language'},
-    {'id': '9a4c9a78-eca9-4395-8798-3f0956f95fad', 'name': 'Flutter Advanced'},
-    {'id': 'c1', 'name': 'Algorithms'},
-    {'id': 'c2', 'name': 'Databases'},
+    {'id': '0b63688c-5068-4898-9831-7ead26d587b3', 'name': 'Lists, Dictionaries, Sets'},
+    {'id': '674c74c6-8525-4a85-86ec-04ab12a032d2', 'name': 'Sorting and Searching'},
+    {'id': 'de53b2dd-b583-4d9c-a190-65e83b26c2b6', 'name': 'Pandas and NumPy basics'},
+    {'id': '21c3597d-b920-494f-b862-1f6da27da305', 'name': 'Dart basics for Flutter'},
+    {'id': '45232220-1b22-4eba-a97f-e50606b2b5ef', 'name': 'Stateless and Stateful widgets'},
+    {'id': '9a4c9a78-eca9-4395-8798-3f0956f95fad', 'name': 'State Management and Architecture'},
   ];
 
   String? _selectedStartId;

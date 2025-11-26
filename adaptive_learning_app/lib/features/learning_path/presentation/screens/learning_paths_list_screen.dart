@@ -1,5 +1,6 @@
 import 'package:adaptive_learning_app/di/di_container.dart';
 import 'package:adaptive_learning_app/features/auth/domain/bloc/auth_bloc.dart';
+import 'package:adaptive_learning_app/features/learning_path/data/dto/learning_path_dtos.dart';
 import 'package:adaptive_learning_app/features/learning_path/domain/bloc/learning_path_bloc.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -13,12 +14,23 @@ class LearningPathsListScreen extends StatefulWidget {
 }
 
 class _LearningPathsListScreenState extends State<LearningPathsListScreen> {
-  late Future<List<Map<String, dynamic>>> _pathsFuture;
+  late Future<List<LearningPathDto>> _pathsFuture;
 
   @override
   void initState() {
     super.initState();
-    _pathsFuture = context.read<DiContainer>().repositories.learningPathRepository.getAvailablePaths();
+    _loadPaths();
+  }
+
+  void _loadPaths() {
+    final authState = context.read<AuthBloc>().state;
+    if (authState is AuthAuthenticated) {
+      _pathsFuture = context.read<DiContainer>().repositories.learningPathRepository.getAvailablePaths(
+        authState.userId,
+      );
+    } else {
+      _pathsFuture = Future.value([]);
+    }
   }
 
   @override
@@ -26,11 +38,14 @@ class _LearningPathsListScreenState extends State<LearningPathsListScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('My Goals')),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => context.pushNamed('create_path_mode'),
+        onPressed: () async {
+          await context.pushNamed('create_path_mode');
+          setState(_loadPaths);
+        },
         label: const Text('Create'),
         icon: const Icon(Icons.add),
       ),
-      body: FutureBuilder<List<Map<String, dynamic>>>(
+      body: FutureBuilder<List<LearningPathDto>>(
         future: _pathsFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
@@ -40,15 +55,13 @@ class _LearningPathsListScreenState extends State<LearningPathsListScreen> {
 
           final paths = snapshot.data ?? [];
           if (paths.isEmpty) return const Center(child: Text('No active paths found.'));
+          final reversedPaths = paths.reversed.toList();
 
           return ListView.separated(
             padding: const EdgeInsets.all(16),
-            itemCount: paths.length,
+            itemCount: reversedPaths.length,
             separatorBuilder: (ctx, index) => const SizedBox(height: 16),
-            itemBuilder: (context, index) {
-              final path = paths[index];
-              return _PathCard(path: path);
-            },
+            itemBuilder: (context, index) => _PathCard(path: reversedPaths[index]),
           );
         },
       ),
@@ -59,12 +72,16 @@ class _LearningPathsListScreenState extends State<LearningPathsListScreen> {
 class _PathCard extends StatelessWidget {
   const _PathCard({required this.path});
 
-  final Map<String, dynamic> path;
+  final LearningPathDto path;
 
   @override
   Widget build(BuildContext context) {
-    final authState = context.read<AuthBloc>().state;
-    final studentId = (authState is AuthAuthenticated) ? authState.userId : '';
+    final goalId = path.goalConcepts.isNotEmpty ? path.goalConcepts.first : 'Unknown';
+    final title = _mapConceptIdToName(goalId);
+    final icon = _mapConceptToIcon(goalId);
+
+    final completedSteps = path.steps.where((s) => s.status == 'completed').length;
+    final totalSteps = path.steps.length;
 
     return Card(
       elevation: 3,
@@ -72,13 +89,7 @@ class _PathCard extends StatelessWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
         onTap: () {
-          context.read<LearningPathBloc>().add(
-            GeneratePathRequested(
-              studentId: studentId,
-              startConceptId: path['startNodeId'],
-              goalConceptId: path['endNodeId'],
-            ),
-          );
+          context.read<LearningPathBloc>().add(SelectExistingPath(path));
           context.pushNamed('learning-path');
         },
         child: Padding(
@@ -94,17 +105,17 @@ class _PathCard extends StatelessWidget {
                     height: 50,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(12)),
-                    child: Text(path['icon'], style: const TextStyle(fontSize: 24)),
+                    child: Text(icon, style: const TextStyle(fontSize: 24)),
                   ),
                   const SizedBox(width: 16),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(path['title'], style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                        Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                         const SizedBox(height: 4),
                         Text(
-                          path['description'],
+                          'description...',
                           style: TextStyle(color: Colors.grey[600], fontSize: 13),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
@@ -120,16 +131,16 @@ class _PathCard extends StatelessWidget {
                 children: [
                   Expanded(
                     child: LinearProgressIndicator(
-                      value: path['progress'],
+                      value: path.completionPercentage,
                       backgroundColor: Colors.grey.shade200,
-                      color: path['progress'] == 1.0 ? Colors.green : Colors.blue,
+                      color: path.completionPercentage >= 1.0 ? Colors.green : Colors.blue,
                       minHeight: 6,
                       borderRadius: BorderRadius.circular(3),
                     ),
                   ),
                   const SizedBox(width: 12),
                   Text(
-                    '${(path['progress'] * 100).toInt()}%',
+                    '${(path.completionPercentage * 100).toInt()}%',
                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                   ),
                 ],
@@ -138,7 +149,7 @@ class _PathCard extends StatelessWidget {
               Align(
                 alignment: Alignment.centerRight,
                 child: Text(
-                  '${path['completedSteps']} / ${path['stepsCount']} steps',
+                  '$completedSteps / $totalSteps steps',
                   style: TextStyle(color: Colors.grey[500], fontSize: 11),
                 ),
               ),
@@ -147,5 +158,21 @@ class _PathCard extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  String _mapConceptIdToName(String id) {
+    if (id.contains('ff9eecf7')) return 'Python Basics';
+    if (id.contains('de53b2dd')) return 'Data Science Intro';
+    if (id.contains('21c3597d')) return 'Dart Language';
+    if (id.contains('9a4c9a78')) return 'Flutter Advanced';
+    return 'Custom Goal';
+  }
+
+  String _mapConceptToIcon(String id) {
+    if (id.contains('ff9eecf7')) return '🐍';
+    if (id.contains('de53b2dd')) return '📊';
+    if (id.contains('21c3597d')) return '💙';
+    if (id.contains('9a4c9a78')) return '🚀';
+    return '🎓';
   }
 }

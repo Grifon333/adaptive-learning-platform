@@ -19,12 +19,16 @@ class LearningPathRequest {
 class LearningPathDto {
   const LearningPathDto({
     required this.id,
+    required this.studentId,
+    required this.goalConcepts,
     required this.status,
     required this.completionPercentage,
     required this.steps,
   });
 
   final String id;
+  final String studentId;
+  final List<String> goalConcepts;
   final String status;
   final double completionPercentage;
   final List<LearningStepDto> steps;
@@ -32,6 +36,8 @@ class LearningPathDto {
   factory LearningPathDto.fromJson(Map<String, dynamic> json) {
     return LearningPathDto(
       id: json['id'] as String,
+      studentId: json['student_id'] as String,
+      goalConcepts: (json['goal_concepts'] as List).map((e) => e as String).toList(),
       status: json['status'] as String,
       completionPercentage: (json['completion_percentage'] as num).toDouble(),
       steps: (json['steps'] as List).map((e) => LearningStepDto.fromJson(e as Map<String, dynamic>)).toList(),

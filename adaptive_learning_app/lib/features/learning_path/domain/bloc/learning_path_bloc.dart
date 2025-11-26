@@ -12,6 +12,7 @@ class LearningPathBloc extends Bloc<LearningPathEvent, LearningPathState> {
       super(LearningPathInitial()) {
     on<GeneratePathRequested>(_onGeneratePath);
     on<LearningPathRefreshRequested>(_onRefreshPath);
+    on<SelectExistingPath>(_onSelectPath);
   }
 
   final ILearningPathRepository _repository;
@@ -48,5 +49,11 @@ class LearningPathBloc extends Bloc<LearningPathEvent, LearningPathState> {
       addError(e, st);
       emit(LearningPathFailure(e.toString()));
     }
+  }
+
+  void _onSelectPath(SelectExistingPath event, Emitter<LearningPathState> emit) {
+    _lastGoalId = event.path.goalConcepts.first;
+    _currentStudentId = event.path.studentId; // Or take from DTO if available
+    emit(LearningPathSuccess(event.path));
   }
 }
