@@ -8,6 +8,7 @@ from loguru import logger
 
 from . import config, schemas
 from .logger import setup_logging
+from .services.adaptation_engine import adaptation_engine
 
 # Storage for HTTP client
 client_store: dict[str, httpx.AsyncClient] = {}
@@ -154,117 +155,28 @@ async def create_learning_path(
     if not kgs_data.path:
         raise HTTPException(status_code=404, detail="No path found")
 
-    # 2. Apply Adaptive Logic (Transform Loop)
-    logger.info("Applying adaptive filtering based on ML predictions...")
-
+    # 2. Batch Fetch Mastery
+    logger.info("Fetching mastery levels...")
     all_concept_ids = [c.id for c in kgs_data.path]
     mastery_map = await _get_mastery_batch(client, str_student_id, all_concept_ids)
 
-    us_steps = []
-    total_time = 0
-    current_step_num = 1
-
-    for concept in kgs_data.path:
-        # 2.1 Ask the ML service about the student's level of knowledge of this concept.
-        mastery_level = mastery_map.get(concept.id, 0.0)
-        logger.info(
-            f"Concept {concept.name} ({concept.id[:8]}...): Mastery {mastery_level:.2f}"
-        )
-
-        resources_payload = [res.model_dump() for res in concept.resources]
-
-        # --- LOGIC BRANCHING ---
-
-        # A. High level of knowledge -> Auto-complete
-        if mastery_level > 0.8:
-            us_steps.append(
-                schemas.USLearningStepCreate(
-                    step_number=current_step_num,
-                    concept_id=concept.id,
-                    resources=resources_payload,
-                    estimated_time=concept.estimated_time,
-                    difficulty=concept.difficulty,
-                    status="completed",
-                )
-            )
-            current_step_num += 1
-            total_time += concept.estimated_time
-            continue
-
-        # B. Remedial Logic (Struggling: 0.0 < Mastery < 0.6)
-        if 0.0 < mastery_level < 0.6:
-            logger.warning(
-                f"Struggle detected on {concept.name}. Generating Remedial Step."
-            )
-
-            # --- 1. REMEDIAL STEP (Additional step) ---
-
-            # AI TODO: Here, we will refer to Gemini in the future:
-            # reason = await ai_service.analyze_error(student_id, concept.id)
-            ai_instruction = (
-                f"Review the material on '{concept.name}' again. Focus on the basics."
-            )
-
-            us_steps.append(
-                schemas.USLearningStepCreate(
-                    step_number=current_step_num,  # The number is the same as the main one (hide it visually)
-                    concept_id=concept.id,
-                    resources=resources_payload,  # Maybe only give part of the resources or others
-                    estimated_time=int(concept.estimated_time * 0.5),
-                    difficulty=concept.difficulty * 0.7,
-                    status="pending",
-                    is_remedial=True,  # Flag for visualization
-                    description=ai_instruction,  # Reason
-                )
-            )
-            total_time += int(concept.estimated_time * 0.5)
-
-            # --- 2. MAIN STEP (Main step) ---
-            # He follows suit, but he is blocked (pending) until we pass remedial.
-
-            us_steps.append(
-                schemas.USLearningStepCreate(
-                    step_number=current_step_num,
-                    concept_id=concept.id,
-                    resources=resources_payload,
-                    estimated_time=concept.estimated_time,
-                    difficulty=concept.difficulty,
-                    status="pending",  # Awaiting remedial
-                    is_remedial=False,
-                    description=concept.description,
-                )
-            )
-            current_step_num += 1
-            total_time += concept.estimated_time
-            continue
-
-        # C. Regular step (or the one following Remedial)
-        us_steps.append(
-            schemas.USLearningStepCreate(
-                step_number=current_step_num,
-                concept_id=concept.id,
-                resources=resources_payload,
-                estimated_time=concept.estimated_time,
-                difficulty=concept.difficulty,
-                status="pending",
-            )
-        )
-        current_step_num += 1
-        total_time += concept.estimated_time
+    # 3. Apply Adaptation Engine
+    logger.info("Running Adaptation Engine...")
+    us_steps, total_time = adaptation_engine.generate_adaptive_steps(
+        kgs_data.path, mastery_map
+    )
 
     if not us_steps:
         # If the student knows EVERYTHING, we return a special answer or create an empty path.
         logger.info("Student already knows the entire path!")
         # In reality, maybe return a message about the completion of the course here.
 
-    # 3. Prepare Payload
+    # 4. Save to User Service
     us_path_data = schemas.USLearningPathCreate(
         goal_concepts=[request.goal_concept_id],
         steps=us_steps,
         estimated_time=total_time,
     )
-
-    # 4. Save to User Service
     final_path = await _save_path_to_user_service(
         client, us_path_data, {"Authorization": authorization}
     )
