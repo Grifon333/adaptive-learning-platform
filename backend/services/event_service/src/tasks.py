@@ -59,7 +59,7 @@ def _trigger_ml_processing(event_data: dict):
     is_correct = context.get("is_correct", False)
 
     if concept_id:
-        logger.info(f"🚀 Triggering ML task for student {student_id}")
+        logger.info(f"Triggering ML task for student {student_id}")
         # Send the task to the 'celery' queue (where ML Worker listens).
         celery_app.send_task(
             "process_student_interaction",
