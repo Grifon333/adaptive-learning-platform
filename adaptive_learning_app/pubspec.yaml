@@ -23,6 +23,8 @@ dependencies:
   equatable: ^2.0.7
   url_launcher: ^6.3.2
   jwt_decoder: ^2.0.1
+  youtube_player_flutter: ^9.1.3
+  webview_flutter: ^4.13.0
 
   # --- Storage & Env ---
   envied: ^1.3.1
