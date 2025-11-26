@@ -226,7 +226,7 @@ def create_learning_path(
 
             if not existing_goals.isdisjoint(new_goals):
                 logger.info(f"Archiving old path {existing_path.id} (Goal overlap)")
-                existing_path.status = "archived"
+                existing_path.status = "archived"  # type: ignore
                 db.add(existing_path)
 
         # Committing updates to old paths before creating new one
