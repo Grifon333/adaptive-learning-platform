@@ -59,4 +59,5 @@ docker-compose.local.yml
 # macOS
 .DS_Store
 
+research/
 !.env.example
