@@ -2,6 +2,8 @@ import 'package:adaptive_learning_app/di/di_container.dart';
 import 'package:adaptive_learning_app/di/di_typedefs.dart';
 import 'package:adaptive_learning_app/features/auth/data/repository/auth_repository.dart';
 import 'package:adaptive_learning_app/features/auth/domain/repository/i_auth_repository.dart';
+import 'package:adaptive_learning_app/features/dashboard/data/repository/analytics_repository.dart';
+import 'package:adaptive_learning_app/features/dashboard/domain/repository/i_analytics_repository.dart';
 import 'package:adaptive_learning_app/features/events/data/repository/event_repository.dart';
 import 'package:adaptive_learning_app/features/events/domain/repository/i_event_repository.dart';
 import 'package:adaptive_learning_app/features/learning_path/data/repository/learning_path_repository.dart';
@@ -19,6 +21,7 @@ final class DiRepositories {
   late final ILearningPathRepository learningPathRepository;
   late final IEventRepository eventRepository;
   late final IProfileRepository profileRepository;
+  late final IAnalyticsRepository analyticsRepository;
 
   void init({required OnProgress onProgress, required OnError onError, required DiContainer diContainer}) {
     try {
@@ -39,6 +42,9 @@ final class DiRepositories {
 
       profileRepository = ProfileRepository(httpClient: diContainer.httpClient);
       onProgress(profileRepository.name);
+
+      analyticsRepository = AnalyticsRepository(httpClient: diContainer.httpClient, appConfig: diContainer.appConfig);
+      onProgress(analyticsRepository.name);
     } on Object catch (error, stackTrace) {
       onError('Repository initialization error', error, stackTrace);
     }

@@ -22,6 +22,7 @@ abstract interface class IAppConfig {
   String get eventServiceUrl;
   String get knowledgeGraphServiceUrl;
   String get mlServiceUrl;
+  String get analyticsServiceUrl;
 }
 
 /// {@template app_config_dev}
@@ -62,6 +63,9 @@ class AppConfigDev implements IAppConfig {
 
   @override
   String get mlServiceUrl => 'http://$_host:8004/api/v1';
+
+  @override
+  String get analyticsServiceUrl => 'http://$_host:8005/api/v1';
 }
 
 /// {@template app_config_stage}
@@ -97,6 +101,8 @@ class AppConfigStage implements IAppConfig {
   String get knowledgeGraphServiceUrl => baseUrl;
   @override
   String get mlServiceUrl => baseUrl;
+  @override
+  String get analyticsServiceUrl => baseUrl;
 }
 
 /// {@template app_config_prod}
@@ -129,4 +135,6 @@ class AppConfigProd implements IAppConfig {
   String get knowledgeGraphServiceUrl => baseUrl;
   @override
   String get mlServiceUrl => baseUrl;
+  @override
+  String get analyticsServiceUrl => baseUrl;
 }
