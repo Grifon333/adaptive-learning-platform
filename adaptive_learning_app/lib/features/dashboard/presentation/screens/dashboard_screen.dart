@@ -1,6 +1,8 @@
 import 'package:adaptive_learning_app/app/app_context_ext.dart';
 import 'package:adaptive_learning_app/features/auth/domain/bloc/auth_bloc.dart';
+import 'package:adaptive_learning_app/features/dashboard/data/dto/dashboard_dtos.dart';
 import 'package:adaptive_learning_app/features/dashboard/domain/bloc/dashboard_bloc.dart';
+import 'package:adaptive_learning_app/features/dashboard/presentation/widgets/activity_chart.dart';
 import 'package:adaptive_learning_app/features/learning_path/data/dto/learning_path_dtos.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -18,9 +20,10 @@ class DashboardScreen extends StatelessWidget {
     if (studentId == null) return const Scaffold(body: Center(child: CircularProgressIndicator()));
 
     return BlocProvider(
-      create: (context) =>
-          DashboardBloc(repository: context.di.repositories.learningPathRepository)
-            ..add(DashboardLoadRequested(studentId!)),
+      create: (context) => DashboardBloc(
+        lpRepository: context.di.repositories.learningPathRepository,
+        analyticsRepository: context.di.repositories.analyticsRepository,
+      )..add(DashboardLoadRequested(studentId!)),
       child: _DashboardView(studentId: studentId),
     );
   }
@@ -35,42 +38,62 @@ class _DashboardView extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Dashboard')),
-      body: RefreshIndicator(
-        onRefresh: () async {
-          context.read<DashboardBloc>().add(DashboardLoadRequested(studentId));
+      body: BlocBuilder<DashboardBloc, DashboardState>(
+        builder: (context, state) {
+          if (state is DashboardLoading) return const Center(child: CircularProgressIndicator());
+          if (state is DashboardFailure) return Center(child: Text('Error: ${state.error}'));
+          if (state is DashboardSuccess) {
+            final analytics = state.analytics;
+            return RefreshIndicator(
+              onRefresh: () async {
+                context.read<DashboardBloc>().add(DashboardLoadRequested(studentId));
+              },
+              child: ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  // 1. Header with Stats
+                  _AnalyticsHeader(analytics: analytics),
+                  const SizedBox(height: 24),
+
+                  // 2. Chart
+                  Text('Activity (Last 7 Days)', style: Theme.of(context).textTheme.titleMedium),
+                  const SizedBox(height: 16),
+                  ActivityChart(data: analytics.activityChart),
+                  const SizedBox(height: 24),
+
+                  // 3. Recommendations
+                  Text(
+                    'Recommended for you',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Based on your knowledge and dependency graph',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey),
+                  ),
+                  const SizedBox(height: 16),
+                  _RecommendationsList(recommendations: state.recommendations),
+                  const SizedBox(height: 24),
+                  ElevatedButton.icon(
+                    onPressed: () => context.pushNamed('paths_list'),
+                    icon: const Icon(Icons.list_alt),
+                    label: const Text('List of trajectories'),
+                    style: ElevatedButton.styleFrom(padding: const EdgeInsets.all(16)),
+                  ),
+                ],
+              ),
+            );
+          }
+          return SizedBox.shrink();
         },
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            const _HeaderSection(),
-            const SizedBox(height: 24),
-            Text(
-              'Recommended for you',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Based on your knowledge and dependency graph',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey),
-            ),
-            const SizedBox(height: 16),
-            const _RecommendationsList(),
-            const SizedBox(height: 24),
-            ElevatedButton.icon(
-              onPressed: () => context.pushNamed('paths_list'),
-              icon: const Icon(Icons.list_alt),
-              label: const Text('List of trajectories'),
-              style: ElevatedButton.styleFrom(padding: const EdgeInsets.all(16)),
-            ),
-          ],
-        ),
       ),
     );
   }
 }
 
-class _HeaderSection extends StatelessWidget {
-  const _HeaderSection();
+class _AnalyticsHeader extends StatelessWidget {
+  const _AnalyticsHeader({required this.analytics});
+  final DashboardDataDto analytics;
 
   @override
   Widget build(BuildContext context) {
@@ -78,65 +101,66 @@ class _HeaderSection extends StatelessWidget {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [Colors.blue.shade800, Colors.blue.shade500],
+          colors: [Colors.blue.shade800, Colors.blue.shade600],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(16),
       ),
-      child: const Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Column(
         children: [
-          Text(
-            'Welcome back!',
-            style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
+          const Text('Your Progress', style: TextStyle(color: Colors.white70, fontSize: 14)),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _StatItem(value: '${(analytics.averageMastery * 100).toInt()}%', label: 'Avg Mastery'),
+              _StatItem(value: '${analytics.totalConceptsLearned}', label: 'Concepts'),
+              _StatItem(value: '${analytics.currentStreak} 🔥', label: 'Day Streak'),
+            ],
           ),
-          SizedBox(height: 8),
-          Text('Continue learning to achieve mastery.', style: TextStyle(color: Colors.white70)),
         ],
       ),
     );
   }
 }
 
-class _RecommendationsList extends StatelessWidget {
-  const _RecommendationsList();
+class _StatItem extends StatelessWidget {
+  const _StatItem({required this.value, required this.label});
+  final String value;
+  final String label;
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<DashboardBloc, DashboardState>(
-      builder: (context, state) {
-        if (state is DashboardLoading) {
-          return const SizedBox(height: 200, child: Center(child: CircularProgressIndicator()));
-        }
-        if (state is DashboardFailure) {
-          return Container(
-            height: 100,
-            alignment: Alignment.center,
-            color: Colors.red.shade50,
-            child: Text('Error: ${state.error}', style: const TextStyle(color: Colors.red)),
-          );
-        }
-        if (state is DashboardSuccess) {
-          if (state.recommendations.isEmpty) {
-            return const SizedBox(height: 100, child: Center(child: Text('No recommendations yet.')));
-          }
+    return Column(
+      children: [
+        Text(
+          value,
+          style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
+        ),
+        Text(label, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+      ],
+    );
+  }
+}
 
-          return SizedBox(
-            height: 220,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: state.recommendations.length,
-              separatorBuilder: (_, _) => const SizedBox(width: 12),
-              itemBuilder: (context, index) {
-                final step = state.recommendations[index];
-                return _RecommendationCard(step: step);
-              },
-            ),
-          );
-        }
-        return const SizedBox.shrink();
-      },
+class _RecommendationsList extends StatelessWidget {
+  const _RecommendationsList({required this.recommendations});
+  final List<LearningStepDto> recommendations;
+
+  @override
+  Widget build(BuildContext context) {
+    if (recommendations.isEmpty) {
+      return const SizedBox(height: 100, child: Center(child: Text('No recommendations yet.')));
+    }
+    return SizedBox(
+      height: 220,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: recommendations.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 12),
+        itemBuilder: (context, index) => _RecommendationCard(step: recommendations[index]),
+      ),
     );
   }
 }

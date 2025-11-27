@@ -201,6 +201,26 @@ services:
     networks:
       - adaptive_network
 
+  analytics_service:
+    build:
+      context: ./backend/services/analytics_service
+    container_name: alp_analytics_service
+    restart: on-failure
+    ports:
+      - "${ANALYTICS_SERVICE}:8000"
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - MONGODB_URL=mongodb://mongodb:27017
+      - MONGODB_DB_NAME=${MONGODB_DB_NAME}
+      - LOG_LEVEL=INFO
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongodb:
+        condition: service_started
+    networks:
+      - adaptive_network
+
 volumes:
   postgres_data:
   neo4j_data:

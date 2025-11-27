@@ -12,10 +12,11 @@ final class DashboardInitial extends DashboardState {}
 final class DashboardLoading extends DashboardState {}
 
 final class DashboardSuccess extends DashboardState {
-  const DashboardSuccess(this.recommendations);
+  const DashboardSuccess({required this.recommendations, required this.analytics});
   final List<LearningStepDto> recommendations;
+  final DashboardDataDto analytics;
   @override
-  List<Object?> get props => [recommendations];
+  List<Object?> get props => [recommendations, analytics];
 }
 
 final class DashboardFailure extends DashboardState {

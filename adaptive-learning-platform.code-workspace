@@ -17,6 +17,9 @@
 		},
 		{
 			"path": "backend/services/ml_service"
+		},
+		{
+			"path": "backend/services/analytics_service"
 		}
 	],
 	"settings": {}
