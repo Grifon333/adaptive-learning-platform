@@ -6,6 +6,7 @@ import 'package:adaptive_learning_app/features/auth/presentation/screens/registe
 import 'package:adaptive_learning_app/features/dashboard/presentation/screens/dashboard_screen.dart';
 import 'package:adaptive_learning_app/features/debug/i_debug_service.dart';
 import 'package:adaptive_learning_app/features/learning_path/data/dto/learning_path_dtos.dart';
+import 'package:adaptive_learning_app/features/learning_path/presentation/screens/assessment_screen.dart';
 import 'package:adaptive_learning_app/features/learning_path/presentation/screens/concept_selector_screen.dart';
 import 'package:adaptive_learning_app/features/learning_path/presentation/screens/create_path_mode_screen.dart';
 import 'package:adaptive_learning_app/features/learning_path/presentation/screens/learning_path_screen.dart';
@@ -110,6 +111,15 @@ class AppRouter {
           builder: (context, state) {
             final args = state.extra as Map<String, String>;
             return QuizScreen(stepId: args['stepId']!, conceptId: args['conceptId']!);
+          },
+        ),
+
+        GoRoute(
+          path: '/assessment',
+          name: 'assessment',
+          builder: (context, state) {
+            final goalId = state.extra as String;
+            return AssessmentScreen(goalConceptId: goalId);
           },
         ),
       ],

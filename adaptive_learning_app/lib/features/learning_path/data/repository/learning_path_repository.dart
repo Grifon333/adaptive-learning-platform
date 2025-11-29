@@ -1,5 +1,6 @@
 import 'package:adaptive_learning_app/app/app_config/app_config.dart';
 import 'package:adaptive_learning_app/app/http/i_http_client.dart';
+import 'package:adaptive_learning_app/features/learning_path/data/dto/assessment_dtos.dart';
 import 'package:adaptive_learning_app/features/learning_path/data/dto/learning_path_dtos.dart';
 import 'package:adaptive_learning_app/features/learning_path/data/dto/quiz_dtos.dart';
 import 'package:adaptive_learning_app/features/learning_path/domain/repository/i_learning_path_repository.dart';
@@ -55,5 +56,22 @@ final class LearningPathRepository implements ILearningPathRepository {
       debugPrint('Error fetching paths: $e');
       return [];
     }
+  }
+
+  @override
+  Future<AssessmentSessionDto> startAssessment({required String studentId, required String goalConceptId}) async {
+    final serviceUrl = appConfig.learningPathServiceUrl;
+    final response = await httpClient.post(
+      '$serviceUrl/assessments/start',
+      data: {'student_id': studentId, 'goal_concept_id': goalConceptId},
+    );
+    return AssessmentSessionDto.fromJson(response.data);
+  }
+
+  @override
+  Future<LearningPathDto> submitAssessment(AssessmentSubmissionDto submission) async {
+    final serviceUrl = appConfig.learningPathServiceUrl;
+    final response = await httpClient.post('$serviceUrl/assessments/submit', data: submission.toJson());
+    return LearningPathDto.fromJson(response.data);
   }
 }

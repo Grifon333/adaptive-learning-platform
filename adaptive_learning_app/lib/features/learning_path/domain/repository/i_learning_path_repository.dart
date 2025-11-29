@@ -1,4 +1,5 @@
 import 'package:adaptive_learning_app/di/di_base_repository.dart';
+import 'package:adaptive_learning_app/features/learning_path/data/dto/assessment_dtos.dart';
 import 'package:adaptive_learning_app/features/learning_path/data/dto/learning_path_dtos.dart';
 import 'package:adaptive_learning_app/features/learning_path/data/dto/quiz_dtos.dart';
 
@@ -14,4 +15,8 @@ abstract interface class ILearningPathRepository with DiBaseRepository {
   Future<List<QuizQuestionDto>> getQuizForConcept(String conceptId);
 
   Future<List<LearningPathDto>> getAvailablePaths(String studentId);
+
+  Future<AssessmentSessionDto> startAssessment({required String studentId, required String goalConceptId});
+
+  Future<LearningPathDto> submitAssessment(AssessmentSubmissionDto submission);
 }

@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from . import schemas
-from .database import get_all_student_knowledge, get_knowledge_states_batch
+from .database import get_all_student_knowledge, get_knowledge_states_batch, update_knowledge_state_batch
 from .config import settings
 
 app = FastAPI(title="ML Service API")
@@ -55,6 +55,41 @@ def get_student_mastery(student_id: str):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/knowledge/batch-update", response_model=schemas.BatchKnowledgeUpdateResponse)
+def update_knowledge_batch(request: schemas.BatchKnowledgeUpdateRequest):
+    """
+    Synchronously updates mastery levels for a student.
+    Used by Assessment Service to persist test results immediately.
+    """
+    # 1. Prepare Data
+    db_updates = []
+    concept_ids = []
+
+    for item in request.updates:
+        db_updates.append({
+            "student_id": str(request.student_id),
+            "concept_id": item.concept_id,
+            "mastery_level": item.mastery_level
+        })
+        concept_ids.append(item.concept_id)
+
+    # 2. Update DB
+    try:
+        update_knowledge_state_batch(db_updates)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database update failed: {str(e)}")
+
+    # 3. Fetch confirmed states to return
+    # This ensures LPS gets the persisted state (Source of Truth)
+    new_map = get_knowledge_states_batch(str(request.student_id), concept_ids)
+
+    return {
+        "student_id": request.student_id,
+        "updated_count": len(db_updates),
+        "new_mastery_map": new_map
+    }
 
 
 @app.get("/health")
