@@ -9,6 +9,7 @@ COPY pyproject.toml poetry.lock ./
 RUN poetry install --no-root
 
 COPY src/ ./src/
+COPY seed.py .
 
 EXPOSE 8000
 

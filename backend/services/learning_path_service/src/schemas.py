@@ -1,5 +1,5 @@
-import uuid
 from typing import Any
+from uuid import UUID
 
 from pydantic import BaseModel
 
@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 
 class LearningPathCreateRequest(BaseModel):
-    start_concept_id: str
+    start_concept_id: str | None = None
     goal_concept_id: str
 
 
@@ -44,6 +44,9 @@ class USLearningStepCreate(BaseModel):
     resources: list[dict[str, Any]]
     estimated_time: int
     difficulty: float
+    status: str = "pending"
+    is_remedial: bool = False
+    description: str | None = None
 
 
 class USLearningPathCreate(BaseModel):
@@ -56,19 +59,43 @@ class USLearningPathCreate(BaseModel):
 
 
 class LearningStep(BaseModel):
-    id: uuid.UUID
+    id: UUID
     step_number: int
     concept_id: str
     resources: list[dict[str, Any]]
     status: str
     estimated_time: int | None = None
     difficulty: float | None = None
+    is_remedial: bool = False
+    description: str | None = None
 
 
 class LearningPathResponse(BaseModel):
-    id: uuid.UUID
-    student_id: uuid.UUID
+    id: UUID
+    student_id: UUID
     goal_concepts: list[str]
     status: str
     completion_percentage: float
     steps: list[LearningStep]
+
+
+class RecommendationResponse(BaseModel):
+    recommendations: list[LearningStep]
+
+
+# --- Quiz Schemas ---
+
+
+class QuestionOption(BaseModel):
+    text: str
+    is_correct: bool
+
+
+class Question(BaseModel):
+    id: str
+    text: str
+    options: list[QuestionOption]
+
+
+class QuizResponse(BaseModel):
+    questions: list[Question]

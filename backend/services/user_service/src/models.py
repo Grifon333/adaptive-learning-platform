@@ -47,6 +47,7 @@ class User(Base):
     )
 
     learning_paths = relationship("LearningPath", back_populates="student")
+    knowledge_states = relationship("KnowledgeState", back_populates="student")
 
 
 class StudentProfile(Base):
@@ -128,5 +129,22 @@ class LearningStep(Base):
     score = Column(Float, nullable=True)  # Test/quiz score
     started_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
+    is_remedial = Column(Boolean, default=False)
+    description = Column(String(500), nullable=True)
 
     path = relationship("LearningPath", back_populates="steps")
+
+
+class KnowledgeState(Base):
+    __tablename__ = "knowledge_states"
+
+    id = Column(Integer, primary_key=True, index=True)
+    student_id = Column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    concept_id = Column(String(100), nullable=False, index=True)
+    mastery_level = Column(Float, default=0.0)  # 0.0 to 1.0
+    confidence = Column(Float, default=0.0)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+    student = relationship("User", back_populates="knowledge_states")

@@ -1,7 +1,7 @@
 import uuid
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 
 class UserCreate(BaseModel):
@@ -57,6 +57,9 @@ class LearningStepCreate(BaseModel):
     resources: list[dict[str, Any]]
     estimated_time: int | None = None
     difficulty: float | None = None
+    status: str = "pending"
+    is_remedial: bool = False
+    description: str | None = None
 
 
 class LearningPathCreate(BaseModel):
@@ -76,6 +79,13 @@ class LearningStep(BaseModel):
     score: float | None = None
     estimated_time: int | None = None
     difficulty: float | None = None
+    is_remedial: bool = False
+    description: str | None = None
+
+    @field_validator("is_remedial", mode="before")
+    @classmethod
+    def set_default_false(cls, v):
+        return v or False
 
 
 class LearningPath(BaseModel):

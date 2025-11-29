@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:i_app_services/i_app_services.dart';
+import 'package:jwt_decoder/jwt_decoder.dart';
 import 'package:meta/meta.dart';
 
 part 'auth_event.dart';
@@ -42,15 +43,35 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   }
 
   Future<void> _onCheckRequested(AuthCheckRequested event, Emitter<AuthState> emit) async {
-    final hasToken = await _secureStorage.containsKey(SecureStorageKeys.accessToken);
-    emit(hasToken ? AuthAuthenticated() : const AuthIdle());
+    try {
+      final accessToken = await _secureStorage.read(SecureStorageKeys.accessToken);
+      if (accessToken != null && !JwtDecoder.isExpired(accessToken)) {
+        final decodedToken = JwtDecoder.decode(accessToken);
+        // 'sub' contains user_id from backend
+        final userId = decodedToken['sub'] as String;
+        emit(AuthAuthenticated(userId: userId));
+      } else {
+        emit(const AuthIdle());
+      }
+    } on Object catch (_) {
+      await _authRepository.logout();
+      emit(const AuthIdle());
+    }
   }
 
   Future<void> _onLoginRequested(AuthLoginRequested event, Emitter<AuthState> emit) async {
     emit(AuthLoading());
     try {
       await _authRepository.login(email: event.email, password: event.password);
-      emit(AuthAuthenticated());
+      // Read token back to get ID
+      final accessToken = await _secureStorage.read(SecureStorageKeys.accessToken);
+      if (accessToken != null) {
+        final decodedToken = JwtDecoder.decode(accessToken);
+        final userId = decodedToken['sub'] as String;
+        emit(AuthAuthenticated(userId: userId));
+      } else {
+        emit(const AuthLoginFailure(error: "Token not found"));
+      }
     } on Object catch (e, st) {
       addError(e, st);
       String errorMessage = 'An unknown error has occurred.';

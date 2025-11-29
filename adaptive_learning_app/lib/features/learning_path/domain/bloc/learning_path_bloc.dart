@@ -11,24 +11,49 @@ class LearningPathBloc extends Bloc<LearningPathEvent, LearningPathState> {
     : _repository = repository,
       super(LearningPathInitial()) {
     on<GeneratePathRequested>(_onGeneratePath);
+    on<LearningPathRefreshRequested>(_onRefreshPath);
+    on<SelectExistingPath>(_onSelectPath);
   }
 
   final ILearningPathRepository _repository;
-  // TODO: Replace with actual student ID retrieval logic
-  final String _studentId = "dummy-student-id";
+  String? _lastGoalId;
+  String? _lastStartId;
+  String? _currentStudentId;
 
   Future<void> _onGeneratePath(GeneratePathRequested event, Emitter<LearningPathState> emit) async {
+    _lastGoalId = event.goalConceptId;
+    _lastStartId = event.startConceptId;
+    _currentStudentId = event.studentId;
+    await _loadPath(emit);
+  }
+
+  Future<void> _onRefreshPath(LearningPathRefreshRequested event, Emitter<LearningPathState> emit) async {
+    if (_lastGoalId == null) return;
+    _currentStudentId = event.studentId;
+    await _loadPath(emit);
+  }
+
+  Future<void> _loadPath(Emitter<LearningPathState> emit) async {
+    if (_currentStudentId == null) return;
     emit(LearningPathLoading());
     try {
+      // The backend (LearningPathService) checks the mastery_level in the ML service for each request,
+      // so re-generation will return steps with updated statuses (completed/pending).
       final path = await _repository.generatePath(
-        studentId: _studentId,
-        startConceptId: event.startConceptId,
-        goalConceptId: event.goalConceptId,
+        studentId: _currentStudentId!,
+        startConceptId: _lastStartId,
+        goalConceptId: _lastGoalId!,
       );
       emit(LearningPathSuccess(path));
     } on Object catch (e, st) {
       addError(e, st);
       emit(LearningPathFailure(e.toString()));
     }
+  }
+
+  void _onSelectPath(SelectExistingPath event, Emitter<LearningPathState> emit) {
+    _lastGoalId = event.path.goalConcepts.first;
+    _currentStudentId = event.path.studentId; // Or take from DTO if available
+    emit(LearningPathSuccess(event.path));
   }
 }

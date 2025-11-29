@@ -1,4 +1,6 @@
 import 'package:adaptive_learning_app/di/di_container.dart';
+import 'package:adaptive_learning_app/features/auth/domain/bloc/auth_bloc.dart';
+import 'package:adaptive_learning_app/features/learning_path/data/dto/quiz_dtos.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -14,63 +16,66 @@ class QuizScreen extends StatefulWidget {
 }
 
 class _QuizScreenState extends State<QuizScreen> {
-  // TODO: In the future, this should come from the API along with the step details.
-  final _question = "What is the main advantage of the BLoC pattern in Flutter?";
-  final _options = [
-    "Easy to use for beginners",
-    "Separation of business logic and interface",
-    "Built-in SQL support",
-    "Automatic code generation",
-  ];
-  final _correctIndex = 1;
+  late Future<List<QuizQuestionDto>> _quizFuture;
 
-  int? _selectedOption;
+  int _currentQuestionIndex = 0;
+  int? _selectedOptionIndex;
   bool _isSubmitting = false;
+  int _correctAnswersCount = 0;
 
-  Future<void> _submitAnswer() async {
-    if (_selectedOption == null) return;
+  @override
+  void initState() {
+    super.initState();
+    _quizFuture = context.read<DiContainer>().repositories.learningPathRepository.getQuizForConcept(widget.conceptId);
+  }
+
+  Future<void> _submitAnswer(List<QuizQuestionDto> questions) async {
+    if (_selectedOptionIndex == null) return;
 
     setState(() => _isSubmitting = true);
 
-    final isCorrect = _selectedOption == _correctIndex;
-    final score = isCorrect ? 1.0 : 0.0;
+    final currentQuestion = questions[_currentQuestionIndex];
+    final isCorrect = currentQuestion.options[_selectedOptionIndex!].isCorrect;
 
-    try {
-      final eventRepo = context.read<DiContainer>().repositories.eventRepository;
+    if (isCorrect) _correctAnswersCount++;
 
-      // This event will be the trigger for the future ML service.
-      await eventRepo.sendEvent(
-        eventType: 'QUIZ_SUBMIT',
-        metadata: {
-          'step_id': widget.stepId,
-          'concept_id': widget.conceptId,
-          'is_correct': isCorrect,
-          'score': score,
-          'selected_option': _selectedOption,
-        },
-      );
+    // If this is the last question, send the result.
+    if (_currentQuestionIndex == questions.length - 1) {
+      final score = _correctAnswersCount / questions.length;
+      // We consider it passed if more than 60% are correct.
+      final passed = score >= 0.6;
 
-      if (mounted) {
-        if (isCorrect) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('Correct! Step completed.'), backgroundColor: Colors.green));
-          // Return true to notify the previous screen of success
-          context.pop(true);
-        } else {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('Incorrect. Please try again.'), backgroundColor: Colors.red));
-          setState(() => _isSubmitting = false);
+      try {
+        final authState = context.read<AuthBloc>().state;
+        final studentId = (authState is AuthAuthenticated) ? authState.userId : null;
+        if (studentId == null) throw Exception("User not authenticated");
+        final eventRepo = context.read<DiContainer>().repositories.eventRepository;
+        await eventRepo.sendEvent(
+          studentId: studentId,
+          eventType: 'QUIZ_SUBMIT',
+          metadata: {'step_id': widget.stepId, 'concept_id': widget.conceptId, 'is_correct': passed, 'score': score},
+        );
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(passed ? 'Test passed!' : 'Test failed. Please try again.'),
+              backgroundColor: passed ? Colors.green : Colors.red,
+            ),
+          );
+          context.pop(passed);
         }
+      } on Object catch (e) {
+        // Error handling
+        debugPrint(e.toString());
       }
-    } on Object catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Sending error: $e'), backgroundColor: Colors.red));
-        setState(() => _isSubmitting = false);
-      }
+    } else {
+      // Let's move on to the next question.
+      setState(() {
+        _currentQuestionIndex++;
+        _selectedOptionIndex = null;
+        _isSubmitting = false;
+      });
     }
   }
 
@@ -78,60 +83,56 @@ class _QuizScreenState extends State<QuizScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Knowledge check')),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              'Concept: ${widget.conceptId.substring(0, 8)}...',
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(color: Colors.grey),
-            ),
-            const SizedBox(height: 20),
-            Text(_question, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 20),
+      body: FutureBuilder<List<QuizQuestionDto>>(
+        future: _quizFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError) {
+            return Center(child: Text('Error: ${snapshot.error}'));
+          }
 
-            RadioGroup<int>(
-              groupValue: _selectedOption,
-              onChanged: (int? val) {
-                if (_isSubmitting) return;
-                if (val != null) {
-                  setState(() => _selectedOption = val);
-                }
-              },
-              child: Column(
-                children: List.generate(_options.length, (index) {
-                  return RadioListTile<int>(title: Text(_options[index]), value: index);
-                }),
-              ),
-            ),
+          final questions = snapshot.data!;
+          if (questions.isEmpty) {
+            return const Center(child: Text('There are no tests for this topic yet.'));
+          }
 
-            // ...List.generate(_options.length, (index) {
-            //   return RadioListTile<int>(
-            //     title: Text(_options[index]),
-            //     value: index,
-            //     groupValue: _selectedOption,
-            //     onChanged: _isSubmitting ? null : (val) => setState(() => _selectedOption = val),
-            //   );
-            // }),
-            const Spacer(),
-            ElevatedButton(
-              onPressed: (_selectedOption == null || _isSubmitting) ? null : _submitAnswer,
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.all(16),
-                backgroundColor: Theme.of(context).primaryColor,
-                foregroundColor: Colors.white,
-              ),
-              child: _isSubmitting
-                  ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                    )
-                  : const Text('Send answer'),
+          final question = questions[_currentQuestionIndex];
+
+          return Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                LinearProgressIndicator(value: (_currentQuestionIndex + 1) / questions.length),
+                const SizedBox(height: 8),
+                Text('Question ${_currentQuestionIndex + 1} of ${questions.length}', textAlign: TextAlign.end),
+                const SizedBox(height: 20),
+                Text(question.text, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 20),
+                RadioGroup<int>(
+                  groupValue: _selectedOptionIndex,
+                  onChanged: (int? val) {
+                    if (_isSubmitting) return;
+                    if (val != null) setState(() => _selectedOptionIndex = val);
+                  },
+                  child: Column(
+                    children: List.generate(question.options.length, (index) {
+                      return RadioListTile<int>(title: Text(question.options[index].text), value: index);
+                    }),
+                  ),
+                ),
+                const Spacer(),
+                ElevatedButton(
+                  onPressed: (_selectedOptionIndex == null || _isSubmitting) ? null : () => _submitAnswer(questions),
+                  style: ElevatedButton.styleFrom(padding: const EdgeInsets.all(16)),
+                  child: Text(_currentQuestionIndex == questions.length - 1 ? 'Complete the test' : 'Next question'),
+                ),
+              ],
             ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }

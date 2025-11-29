@@ -1,14 +1,15 @@
 services:
-  # 1. PostgreSQ: для реляційних даних (користувачі, профілі, траєкторії)
+  # 1. PostgreSQL
   postgres:
     image: postgres:15-alpine
     container_name: alp_postgres
+    restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -19,16 +20,19 @@ services:
     networks:
       - adaptive_network
 
-  # 2. Neo4j: для Графа знань (концепції, пререквізити)
+  # 2. Neo4j
   neo4j:
     image: neo4j:5.12
     container_name: alp_neo4j
+    restart: unless-stopped
     environment:
       - NEO4J_AUTH=${NEO4J_USER}/${NEO4J_PASSWORD}
       - NEO4J_PLUGINS=["apoc","graph-data-science"]
+      - NEO4J_dbms_memory_heap_initial__size=512m
+      - NEO4J_dbms_memory_heap_max__size=1G
     ports:
-      - "7474:7474" # HTTP
-      - "7687:7687" # Bolt
+      - "${NEO4J_PORT_HTTP}:7474"
+      - "${NEO4J_PORT_BOLT}:7687"
     volumes:
       - neo4j_data:/data
     healthcheck:
@@ -36,27 +40,29 @@ services:
       interval: 10s
       timeout: 10s
       retries: 5
-      start_period: 20s
+      start_period: 30s
     networks:
       - adaptive_network
 
-  # 3. MongoDB: для логування подій та поведінкових патернів
+  # 3. MongoDB
   mongodb:
     image: mongo:7.0
     container_name: alp_mongo
+    restart: unless-stopped
     ports:
-      - "27017:27017"
+      - "${MONGODB_PORT}:27017"
     volumes:
       - mongo_data:/data/db
     networks:
       - adaptive_network
 
-  # 4. Redis: для кешування, сесій та як брокер для Celery
+  # 4. Redis
   redis:
     image: redis:7-alpine
     container_name: alp_redis
+    restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT}:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -67,12 +73,15 @@ services:
     networks:
       - adaptive_network
 
+  # --- Microservices ---
+
   user_service:
     build:
       context: ./backend/services/user_service
     container_name: alp_user_service
+    restart: on-failure
     ports:
-      - "8000:8000"
+      - "${USER_SERVICE_PORT}:8000"
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       - SECRET_KEY=${USER_SERVICE_SECRET_KEY}
@@ -80,10 +89,6 @@ services:
       - ACCESS_TOKEN_EXPIRE_MINUTES=${USER_SERVICE_ACCESS_TOKEN_EXPIRE_MINUTES}
       - REFRESH_TOKEN_EXPIRE_MINUTES=${USER_SERVICE_REFRESH_TOKEN_EXPIRE_MINUTES}
       - LOG_LEVEL=INFO
-    volumes:
-      - ./backend/services/user_service/src:/app/src
-      - ./backend/services/user_service/migrations:/app/migrations
-      - ./backend/services/user_service/alembic.ini:/app/alembic.ini
     depends_on:
       postgres:
         condition: service_healthy
@@ -94,15 +99,14 @@ services:
     build:
       context: ./backend/services/knowledge_graph_service
     container_name: alp_kg_service
+    restart: on-failure
     ports:
-      - "8001:8000"
+      - "${KG_SERVICE_PORT}:8000"
     environment:
       - NEO4J_URI=bolt://neo4j:7687
       - NEO4J_USER=${NEO4J_USER}
       - NEO4J_PASSWORD=${NEO4J_PASSWORD}
       - LOG_LEVEL=INFO
-    volumes:
-      - ./backend/services/knowledge_graph_service/src:/app/src
     depends_on:
       neo4j:
         condition: service_healthy
@@ -113,19 +117,17 @@ services:
     build:
       context: ./backend/services/learning_path_service
     container_name: alp_path_service
+    restart: on-failure
     ports:
-      - "8002:8000"
+      - "${LP_SERVICE_PORT}:8000"
     environment:
-      - USER_SERVICE_URL=http://user_service:8000
-      - KG_SERVICE_URL=http://knowledge_graph_service:8000
+      - USER_SERVICE_URL=${INTERNAL_USER_SERVICE_URL}
+      - KG_SERVICE_URL=${INTERNAL_KG_SERVICE_URL}
+      - ML_SERVICE_URL=${INTERNAL_ML_SERVICE_URL}
       - LOG_LEVEL=INFO
-    volumes:
-      - ./backend/services/learning_path_service/src:/app/src
     depends_on:
-      user_service:
-        condition: service_started
-      knowledge_graph_service:
-        condition: service_started
+      - user_service
+      - knowledge_graph_service
     networks:
       - adaptive_network
 
@@ -133,26 +135,98 @@ services:
     build:
       context: ./backend/services/event_service
     container_name: alp_event_service
+    restart: on-failure
     ports:
-      - "8003:8000"
+      - "${EVENT_SERVICE_PORT}:8000"
     environment:
       - MONGODB_URL=mongodb://mongodb:27017
+      - MONGODB_DB_NAME=${MONGODB_DB_NAME}
+      - REDIS_URL=redis://redis:6379/0
       - LOG_LEVEL=INFO
-    volumes:
-      - ./backend/services/event_service/src:/app/src
     depends_on:
+      - mongodb
+      - redis
+    networks:
+      - adaptive_network
+
+  ml_service:
+    build:
+      context: ./backend/services/ml_service
+    container_name: alp_ml_service
+    restart: on-failure
+    ports:
+      - "${ML_SERVICE_PORT}:8000"
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - LOG_LEVEL=INFO
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - adaptive_network
+
+  celery_worker:
+    build:
+      context: ./backend/services/ml_service
+    container_name: alp_celery_worker
+    restart: on-failure
+    command: ["poetry", "run", "celery", "-A", "src.celery_app", "worker", "--loglevel=info"]
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - LOG_LEVEL=INFO
+    depends_on:
+      - redis
+      - ml_service
+    networks:
+      - adaptive_network
+
+  event_worker:
+    build:
+      context: ./backend/services/event_service
+    container_name: alp_event_worker
+    restart: unless-stopped
+    command: ["poetry", "run", "celery", "-A", "src.celery_app", "worker", "--loglevel=info", "-Q", "event_queue"]
+    environment:
+      - MONGODB_URL=mongodb://mongodb:27017
+      - MONGODB_DB_NAME=${MONGODB_DB_NAME}
+      - REDIS_URL=redis://redis:6379/0
+      - LOG_LEVEL=INFO
+    depends_on:
+      - redis
       - mongodb
     networks:
       - adaptive_network
 
-# Томи для збереження даних
+  analytics_service:
+    build:
+      context: ./backend/services/analytics_service
+    container_name: alp_analytics_service
+    restart: on-failure
+    ports:
+      - "${ANALYTICS_SERVICE}:8000"
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - MONGODB_URL=mongodb://mongodb:27017
+      - MONGODB_DB_NAME=${MONGODB_DB_NAME}
+      - LOG_LEVEL=INFO
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongodb:
+        condition: service_started
+    networks:
+      - adaptive_network
+
 volumes:
   postgres_data:
   neo4j_data:
   mongo_data:
   redis_data:
 
-# Мережа для взаємодії контейнерів
 networks:
   adaptive_network:
     driver: bridge
