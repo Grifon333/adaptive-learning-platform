@@ -30,6 +30,40 @@ def update_knowledge_state(student_id: str, concept_id: str, mastery_level: floa
         logger.error(f"DB Error during upsert: {e}")
         raise
 
+
+def update_knowledge_state_batch(updates: list[dict]):
+    """
+    Batch UPSERT for knowledge states.
+    updates: list of dicts with keys {'student_id', 'concept_id', 'mastery_level'}
+    """
+    if not updates:
+        return
+
+    # Constructing a VALUES list for the query
+    # Note: In a real high-load scenario, we might use postgres-specific unnest or copy,
+    # but for <100 items, a loop with execute_many or a generated query is fine.
+    # We will use explicit transaction for safety.
+
+    query = text("""
+        INSERT INTO knowledge_states (student_id, concept_id, mastery_level, updated_at, confidence)
+        VALUES (:student_id, :concept_id, :mastery_level, NOW(), 0.9)
+        ON CONFLICT (student_id, concept_id)
+        DO UPDATE SET
+            mastery_level = EXCLUDED.mastery_level,
+            updated_at = NOW(),
+            confidence = 0.9;
+    """)
+
+    try:
+        with engine.begin() as conn:
+            # SQLAlchemy execute with a list of dicts performs an executemany
+            conn.execute(query, updates)
+            logger.info(f"Batch upserted {len(updates)} knowledge states.")
+    except Exception as e:
+        logger.error(f"DB Error during batch upsert: {e}")
+        raise
+
+
 def get_knowledge_states_batch(student_id: str, concept_ids: list[str]) -> dict[str, float]:
     """
     Batch retrieval of mastery levels. Returns dict {concept_id: mastery}.

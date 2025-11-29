@@ -66,18 +66,52 @@ class _ConceptSelectorScreenState extends State<ConceptSelectorScreen> {
 
             ElevatedButton(
               onPressed: _canSubmit(needsStart, needsEnd)
-                  ? () {
-                      final authState = context.read<AuthBloc>().state;
-                      final studentId = (authState is AuthAuthenticated) ? authState.userId : '';
-                      if (studentId.isEmpty) return;
-                      context.read<LearningPathBloc>().add(
-                        GeneratePathRequested(
-                          studentId: studentId,
-                          startConceptId: _selectedStartId,
-                          goalConceptId: _selectedEndId ?? '',
+                  ? () async {
+                      final goalId = _selectedEndId ?? '';
+                      if (goalId.isEmpty) return;
+
+                      // Ask user about assessment
+                      final result = await showDialog<bool>(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          title: const Text('Personalize your path?'),
+                          content: const Text(
+                            'Would you like to take a short assessment to skip topics you already know?',
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context, false), // No, just generate
+                              child: const Text('Skip'),
+                            ),
+                            FilledButton(
+                              onPressed: () => Navigator.pop(context, true), // Yes, start test
+                              child: const Text('Start Assessment'),
+                            ),
+                          ],
                         ),
                       );
-                      context.pushNamed('learning-path');
+
+                      if (result == true) {
+                        if (context.mounted) {
+                          context.pushNamed('assessment', extra: goalId);
+                        }
+                      } else {
+                        // Standard generation (Previous logic)
+                        final authState = context.read<AuthBloc>().state;
+                        final studentId = (authState is AuthAuthenticated) ? authState.userId : '';
+                        if (studentId.isEmpty) return;
+
+                        if (context.mounted) {
+                          context.read<LearningPathBloc>().add(
+                            GeneratePathRequested(
+                              studentId: studentId,
+                              startConceptId: _selectedStartId,
+                              goalConceptId: goalId,
+                            ),
+                          );
+                          context.pushNamed('learning-path');
+                        }
+                      }
                     }
                   : null,
               style: ElevatedButton.styleFrom(padding: const EdgeInsets.all(16)),

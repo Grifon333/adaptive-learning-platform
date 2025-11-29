@@ -88,7 +88,7 @@ class RecommendationResponse(BaseModel):
 
 class QuestionOption(BaseModel):
     text: str
-    is_correct: bool
+    is_correct: bool = False
 
 
 class Question(BaseModel):
@@ -99,3 +99,36 @@ class Question(BaseModel):
 
 class QuizResponse(BaseModel):
     questions: list[Question]
+
+
+# --- Assessment Schemas ---
+
+
+class AssessmentStartRequest(BaseModel):
+    student_id: UUID
+    goal_concept_id: str
+
+
+class AssessmentQuestion(BaseModel):
+    id: str
+    text: str
+    options: list[dict[str, Any]]
+    concept_id: str
+    difficulty: float
+
+
+class AssessmentSession(BaseModel):
+    session_id: str
+    total_questions: int
+    questions: list[AssessmentQuestion]
+
+
+class AssessmentSubmission(BaseModel):
+    student_id: UUID
+    goal_concept_id: str
+    answers: dict[str, int]  # {question_id: selected_option_index}
+
+
+class AssessmentResult(BaseModel):
+    student_id: UUID
+    mastery_scores: dict[str, float]  # {concept_id: score}

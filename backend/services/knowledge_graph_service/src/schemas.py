@@ -81,15 +81,33 @@ class QuestionOption(BaseModel):
 class QuestionCreate(BaseModel):
     text: str
     options: list[QuestionOption]
+    difficulty: float = 1.0
 
 
 class Question(BaseModel):
     id: str
     text: str
     options: list[QuestionOption]
+    difficulty: float = 1.0
 
     model_config = {"from_attributes": True}
 
 
 class QuizResponse(BaseModel):
     questions: list[Question]
+
+
+class BatchQuestionsRequest(BaseModel):
+    concept_ids: list[str]
+    min_difficulty: float | None = None
+    max_difficulty: float | None = None
+    limit_per_concept: int = 3
+
+
+class ConceptQuestions(BaseModel):
+    concept_id: str
+    questions: list[Question]
+
+
+class BatchQuestionsResponse(BaseModel):
+    data: list[ConceptQuestions]

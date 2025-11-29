@@ -18,3 +18,16 @@ class PredictionResponse(BaseModel):
 class BatchPredictionResponse(BaseModel):
     student_id: UUID
     mastery_map: dict[str, float] # {concept_id: mastery_level}
+
+class KnowledgeUpdateItem(BaseModel):
+    concept_id: str
+    mastery_level: float
+
+class BatchKnowledgeUpdateRequest(BaseModel):
+    student_id: UUID
+    updates: list[KnowledgeUpdateItem]
+
+class BatchKnowledgeUpdateResponse(BaseModel):
+    student_id: UUID
+    updated_count: int
+    new_mastery_map: dict[str, float]

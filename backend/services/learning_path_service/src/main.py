@@ -9,6 +9,7 @@ from loguru import logger
 from . import config, schemas
 from .logger import setup_logging
 from .services.adaptation_engine import adaptation_engine
+from .services.assessment_service import assessment_service
 
 # Storage for HTTP client
 client_store: dict[str, httpx.AsyncClient] = {}
@@ -62,30 +63,6 @@ async def _fetch_kg_path(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="KG Service is unavailable",
         ) from e
-
-
-async def _get_mastery_batch(
-    client: httpx.AsyncClient, student_id: str, concept_ids: list[str]
-) -> dict[str, float]:
-    """
-    Fetches mastery levels for multiple concepts in ONE request.
-    Returns: {concept_id: mastery_level}
-    """
-    if not concept_ids:
-        return {}
-
-    try:
-        ml_url = f"{config.settings.ML_SERVICE_URL}/api/v1/predict/batch"
-        ml_response = await client.post(
-            ml_url, json={"student_id": student_id, "concept_ids": concept_ids}
-        )
-        ml_response.raise_for_status()
-        data = ml_response.json().get("mastery_map", {})
-        return cast(dict[str, float], data)
-    except Exception as e:
-        logger.error(f"Failed to query ML service batch: {e}")
-        # Fallback: assume zero knowledge on error to allow path generation
-        return {cid: 0.0 for cid in concept_ids}
 
 
 async def _save_path_to_user_service(
@@ -301,6 +278,126 @@ async def get_quiz_for_concept(
     except Exception as e:
         logger.error(f"Failed to fetch quiz: {e}")
         return {"questions": []}
+
+
+# NOTE: We redefine _get_mastery_batch to allow merging with assessment results
+async def _get_mastery_batch(
+    client: httpx.AsyncClient, student_id: str, concept_ids: list[str]
+) -> dict[str, float]:
+    if not concept_ids:
+        return {}
+    try:
+        ml_url = f"{config.settings.ML_SERVICE_URL}/api/v1/predict/batch"
+        ml_response = await client.post(
+            ml_url, json={"student_id": student_id, "concept_ids": concept_ids}
+        )
+        ml_response.raise_for_status()
+        data = ml_response.json().get("mastery_map", {})
+        return cast(dict[str, float], data)
+    except Exception as e:
+        logger.error(f"Failed to query ML service batch: {e}")
+        return {cid: 0.0 for cid in concept_ids}
+
+
+@app.post(
+    "/api/v1/assessments/start",
+    response_model=schemas.AssessmentSession,
+    status_code=status.HTTP_200_OK,
+)
+async def start_initial_assessment(
+    request: schemas.AssessmentStartRequest,
+    client: httpx.AsyncClient = Depends(get_http_client),
+):
+    """
+    Generates an initial test session for the requested Goal.
+    """
+    logger.info(f"Generating assessment for student {request.student_id}")
+    try:
+        session = await assessment_service.generate_assessment(
+            client, request.goal_concept_id, str(request.student_id)
+        )
+        return session
+    except Exception as e:
+        logger.error(f"Error starting assessment: {e}")
+        raise HTTPException(
+            status_code=500, detail="Failed to generate assessment"
+        ) from e
+
+
+@app.post(
+    "/api/v1/assessments/submit",
+    response_model=schemas.LearningPathResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def submit_assessment(
+    submission: schemas.AssessmentSubmission,
+    authorization: str | None = Header(None),
+    client: httpx.AsyncClient = Depends(get_http_client),
+):
+    """
+    1. Grades the assessment against KGS data.
+    2. Updates ML system (via Event bus).
+    3. Calculates local mastery.
+    4. Generates and saves a personalized Learning Path.
+    """
+    if authorization is None:
+        raise HTTPException(status_code=401, detail="Authorization header missing")
+
+    logger.info(f"Processing assessment submission for {submission.student_id}")
+    str_student_id = str(submission.student_id)
+
+    # 1. Grade & Update ML
+    try:
+        assessment_mastery_map = await assessment_service.grade_and_update_ml(
+            client, submission
+        )
+    except Exception as e:
+        logger.error(f"Grading failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to grade assessment") from e
+
+    # 2. Fetch Raw Path (Structure)
+    kgs_data = await _fetch_kg_path(client, submission.goal_concept_id)
+    if not kgs_data.path:
+        raise HTTPException(status_code=404, detail="No path found for this goal")
+
+    # 3. Fetch Historical Mastery (from ML Service)
+    # We combine historical data with the *just* calculated assessment results.
+    # The assessment results take precedence for the immediate path generation.
+    all_concept_ids = [c.id for c in kgs_data.path]
+    historical_mastery = await _get_mastery_batch(
+        client, str_student_id, all_concept_ids
+    )
+
+    # Merge: Assessment overrides History for this session
+    combined_mastery = {**historical_mastery, **assessment_mastery_map}
+
+    # 4. Run Adaptation Engine
+    us_steps, total_time = adaptation_engine.generate_adaptive_steps(
+        kgs_data.path, combined_mastery
+    )
+
+    if not us_steps:
+        # Edge case: Student knows everything
+        logger.info("Student mastered all concepts via assessment.")
+        # We can create a "Completed" path or a maintenance path.
+        # For now, we return a completed path container.
+        us_path_data = schemas.USLearningPathCreate(
+            goal_concepts=[submission.goal_concept_id], steps=[], estimated_time=0
+        )
+    else:
+        us_path_data = schemas.USLearningPathCreate(
+            goal_concepts=[submission.goal_concept_id],
+            steps=us_steps,
+            estimated_time=total_time,
+        )
+
+    # 5. Save to User Service
+    final_path = await _save_path_to_user_service(
+        client, us_path_data, {"Authorization": authorization}
+    )
+
+    logger.success(f"Assessment complete. Generated path with {len(us_steps)} steps.")
+    return final_path
 
 
 @app.get("/health")

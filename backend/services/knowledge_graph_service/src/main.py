@@ -69,7 +69,7 @@ async def create_concept(
             raise HTTPException(status_code=500, detail="Could not create concept")
 
         node = record[0]
-        # Повертаємо пустий список ресурсів для нової концепції
+        # Return an empty list of resources for the new concept
         return schemas.Concept(**dict(node), resources=[])
 
     except Exception as e:
@@ -251,7 +251,7 @@ async def get_shortest_path(
         # Logic: Find a path p to end_node where the first node has no incoming links PREREQUISITE
         query = (
             "MATCH (end:Concept {id: $end_id}) "
-            "MATCH p = (start:Concept)-[:PREREQUISITE*]->(end) "
+            "MATCH p = (start:Concept)-[:PREREQUISITE*0..]->(end) "
             "WHERE NOT (start)<-[:PREREQUISITE]-() "
             "WITH p, length(p) as len ORDER BY len DESC LIMIT 1 "  # Take the longest path from the root
             "WITH nodes(p) AS path_nodes "
@@ -267,6 +267,9 @@ async def get_shortest_path(
 
         if not records:
             if not start_id:
+                logger.info(
+                    f"Main path query empty. Attempting fallback for single concept: {end_id}"
+                )
                 # Try to simply return the target itself if it has no dependencies.
                 fallback_query = (
                     "MATCH (c:Concept {id: $end_id}) "
@@ -275,8 +278,11 @@ async def get_shortest_path(
                 )
                 result = await db.run(fallback_query, {"end_id": end_id})
                 records = [record async for record in result]
-            logger.warning(f"No path found from {start_id} to {end_id}")
-            return schemas.PathResponse(path=[])
+
+            # Re-check records after fallback attempt
+            if not records:
+                logger.warning(f"No path found from {start_id} to {end_id}")
+                return schemas.PathResponse(path=[])
 
         path_concepts = []
         for record in records:
@@ -416,6 +422,77 @@ async def get_concept_quiz(concept_id: str, db: AsyncSession = Depends(get_db_se
 
     except Exception as e:
         logger.error(f"Error fetching quiz: {e}")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@app.post("/api/v1/questions/batch", response_model=schemas.BatchQuestionsResponse)
+async def get_questions_batch(
+    req: schemas.BatchQuestionsRequest, db: AsyncSession = Depends(get_db_session)
+):
+    """
+    Fetches questions for a list of concepts, optionally filtered by difficulty.
+    Used by Learning Path Service to construct assessments.
+    """
+    if not req.concept_ids:
+        return schemas.BatchQuestionsResponse(data=[])
+
+    # Dynamic query building
+    # We collect questions per concept, limited by the request
+    query = (
+        "MATCH (c:Concept)-[:HAS_QUESTION]->(q:Question) " "WHERE c.id IN $concept_ids "
+    )
+
+    if req.min_difficulty is not None:
+        query += "AND q.difficulty >= $min_diff "
+
+    if req.max_difficulty is not None:
+        query += "AND q.difficulty <= $max_diff "
+
+    query += (
+        "WITH c, q "
+        "ORDER BY q.difficulty ASC "  # Basic ordering
+        "WITH c, collect(q)[..$limit] as questions "
+        "RETURN c.id as concept_id, questions"
+    )
+
+    params = {
+        "concept_ids": req.concept_ids,
+        "limit": req.limit_per_concept,
+        "min_diff": req.min_difficulty,
+        "max_diff": req.max_difficulty,
+    }
+
+    try:
+        result = await db.run(query, params)
+        records = [record async for record in result]
+
+        response_data = []
+        for record in records:
+            concept_id = record["concept_id"]
+            q_nodes = record["questions"]
+
+            parsed_questions = []
+            for q in q_nodes:
+                q_dict = dict(q)
+                if isinstance(q_dict.get("options"), str):
+                    q_dict["options"] = json.loads(q_dict["options"])
+
+                # Ensure difficulty is present (handle legacy nodes if any)
+                if "difficulty" not in q_dict:
+                    q_dict["difficulty"] = 1.0
+
+                parsed_questions.append(schemas.Question(**q_dict))
+
+            response_data.append(
+                schemas.ConceptQuestions(
+                    concept_id=concept_id, questions=parsed_questions
+                )
+            )
+
+        return schemas.BatchQuestionsResponse(data=response_data)
+
+    except Exception as e:
+        logger.error(f"Error fetching batch questions: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
