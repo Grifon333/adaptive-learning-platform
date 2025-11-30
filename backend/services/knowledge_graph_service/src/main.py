@@ -1,9 +1,12 @@
 import json
+import os
+import shutil
 import uuid
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile, status
+from fastapi.staticfiles import StaticFiles
 from loguru import logger
 from neo4j import AsyncSession
 
@@ -26,6 +29,9 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Knowledge Graph Service", lifespan=lifespan)
 
+UPLOAD_DIR = "/app/uploads"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+app.mount("/static", StaticFiles(directory=UPLOAD_DIR), name="static")
 
 # --- Concept Endpoints ---
 
@@ -185,42 +191,6 @@ async def add_resource_to_concept(
 
 
 # --- Relationship & Path Endpoints ---
-
-
-@app.post("/api/v1/relationships", status_code=status.HTTP_201_CREATED)
-async def create_relationship(
-    rel: schemas.RelationshipCreate, db: AsyncSession = Depends(get_db_session)
-):
-    """
-    Creates a relationship between two concepts.
-    """
-    query = (
-        f"MATCH (a:Concept {{id: $start_id}}), (b:Concept {{id: $end_id}}) "
-        f"CREATE (a)-[r:{rel.rel_type}]->(b) "
-        f"RETURN type(r) AS rel_type"
-    )
-
-    try:
-        result = await db.run(
-            query,
-            {
-                "start_id": rel.start_concept_id,
-                "end_id": rel.end_concept_id,
-            },
-        )
-        record = await result.single()
-
-        if record is None:
-            raise HTTPException(
-                status_code=404, detail="One or both concepts not found"
-            )
-
-        return {"status": "created", "type": record["rel_type"]}
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error creating relationship: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @app.get("/api/v1/path", response_model=schemas.PathResponse)
@@ -494,6 +464,323 @@ async def get_questions_batch(
     except Exception as e:
         logger.error(f"Error fetching batch questions: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@app.get("/api/v1/concepts", response_model=schemas.ConceptListResponse)
+async def get_all_concepts(
+    skip: int = 0, limit: int = 100, db: AsyncSession = Depends(get_db_session)
+):
+    """
+    Retrieves a paginated list of concepts.
+    """
+    # 1. Count Total
+    count_query = "MATCH (c:Concept) RETURN count(c) as total"
+    count_result = await db.run(count_query)
+    total = (await count_result.single())["total"]
+
+    # 2. Fetch Items
+    query = (
+        "MATCH (c:Concept) " "RETURN c " "ORDER BY c.name " "SKIP $skip LIMIT $limit"
+    )
+    result = await db.run(query, {"skip": skip, "limit": limit})
+    records = [record async for record in result]
+
+    concepts = [schemas.Concept(**dict(r["c"])) for r in records]
+
+    return schemas.ConceptListResponse(total=total, items=concepts)
+
+
+@app.put("/api/v1/concepts/{concept_id}", response_model=schemas.Concept)
+async def update_concept(
+    concept_id: str,
+    update_data: schemas.ConceptUpdate,
+    db: AsyncSession = Depends(get_db_session),
+):
+    """
+    Updates concept properties.
+    """
+    # Construct dynamic SET clause
+    fields = update_data.model_dump(exclude_unset=True)
+    if not fields:
+        raise HTTPException(status_code=400, detail="No fields to update")
+
+    set_clauses = ", ".join([f"c.{key} = ${key}" for key in fields.keys()])
+
+    query = f"MATCH (c:Concept {{id: $id}}) " f"SET {set_clauses} " "RETURN c"
+
+    params = {"id": concept_id, **fields}
+
+    try:
+        result = await db.run(query, params)
+        record = await result.single()
+
+        if not record:
+            raise HTTPException(status_code=404, detail="Concept not found")
+
+        return schemas.Concept(**dict(record["c"]))
+    except Exception as e:
+        logger.error(f"Error updating concept: {e}")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@app.delete("/api/v1/concepts/{concept_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_concept(concept_id: str, db: AsyncSession = Depends(get_db_session)):
+    """
+    Deletes a concept and all its attached relationships.
+    """
+    # DETACH DELETE removes relationships first to prevent orphan errors
+    query = "MATCH (c:Concept {id: $id}) DETACH DELETE c"
+
+    try:
+        # Check existence first (optional, but good for UX)
+        check = await db.run("MATCH (c:Concept {id: $id}) RETURN c", {"id": concept_id})
+        if not await check.single():
+            raise HTTPException(status_code=404, detail="Concept not found")
+
+        await db.run(query, {"id": concept_id})
+        logger.info(f"Deleted concept {concept_id}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting concept: {e}")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@app.post("/api/v1/relationships", status_code=status.HTTP_201_CREATED)
+async def create_relationship(
+    rel: schemas.RelationshipCreate, db: AsyncSession = Depends(get_db_session)
+):
+    """
+    Creates a relationship between two concepts with Cycle Detection.
+    """
+    if rel.start_concept_id == rel.end_concept_id:
+        raise HTTPException(status_code=400, detail="Cannot link a concept to itself")
+
+    # 1. Cycle Detection Logic
+    # If we are adding A -> B, check if a path B -> ... -> A already exists.
+    # If it does, adding A -> B closes the loop.
+    cycle_check_query = (
+        "MATCH path = (end:Concept {id: $end_id})-[:PREREQUISITE*]->(start:Concept {id: $start_id}) "
+        "RETURN path LIMIT 1"
+    )
+
+    try:
+        check_result = await db.run(
+            cycle_check_query,
+            {"start_id": rel.start_concept_id, "end_id": rel.end_concept_id},
+        )
+        if await check_result.single():
+            raise HTTPException(
+                status_code=400,
+                detail="Cycle detected! Adding this relationship would create an infinite loop.",
+            )
+
+        # 2. Create Relationship (If safe)
+        query = (
+            f"MATCH (a:Concept {{id: $start_id}}), (b:Concept {{id: $end_id}}) "
+            f"MERGE (a)-[r:{rel.rel_type}]->(b) "
+            f"RETURN type(r) AS rel_type"
+        )
+
+        result = await db.run(
+            query,
+            {
+                "start_id": rel.start_concept_id,
+                "end_id": rel.end_concept_id,
+            },
+        )
+        record = await result.single()
+
+        if record is None:
+            raise HTTPException(
+                status_code=404, detail="One or both concepts not found"
+            )
+
+        return {"status": "created", "type": record["rel_type"]}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating relationship: {e}")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@app.delete("/api/v1/relationships", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_relationship(
+    rel: schemas.RelationshipDelete, db: AsyncSession = Depends(get_db_session)
+):
+    """
+    Removes a specific relationship between two concepts.
+    """
+    query = (
+        f"MATCH (a:Concept {{id: $start_id}})-[r:{rel.rel_type}]->(b:Concept {{id: $end_id}}) "
+        "DELETE r"
+    )
+
+    try:
+        await db.run(
+            query, {"start_id": rel.start_concept_id, "end_id": rel.end_concept_id}
+        )
+    except Exception as e:
+        logger.error(f"Error deleting relationship: {e}")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@app.get("/api/v1/resources", response_model=schemas.ResourceListResponse)
+async def get_all_resources(
+    skip: int = 0, limit: int = 100, db: AsyncSession = Depends(get_db_session)
+):
+    """
+    Retrieves a paginated list of all available resources.
+    """
+    # 1. Count Total
+    count_query = "MATCH (r:Resource) RETURN count(r) as total"
+    count_result = await db.run(count_query)
+    total = (await count_result.single())["total"]
+
+    # 2. Fetch Items
+    query = (
+        "MATCH (r:Resource) " "RETURN r " "ORDER BY r.title " "SKIP $skip LIMIT $limit"
+    )
+    result = await db.run(query, {"skip": skip, "limit": limit})
+    records = [record async for record in result]
+
+    items = [schemas.Resource(**dict(r["r"])) for r in records]
+
+    return schemas.ResourceListResponse(total=total, items=items)
+
+
+@app.put("/api/v1/resources/{resource_id}", response_model=schemas.Resource)
+async def update_resource(
+    resource_id: str,
+    update_data: schemas.ResourceUpdate,
+    db: AsyncSession = Depends(get_db_session),
+):
+    """
+    Updates resource metadata.
+    """
+    fields = update_data.model_dump(exclude_unset=True)
+    if not fields:
+        raise HTTPException(status_code=400, detail="No fields to update")
+
+    set_clauses = ", ".join([f"r.{key} = ${key}" for key in fields.keys()])
+
+    query = f"MATCH (r:Resource {{id: $id}}) " f"SET {set_clauses} " "RETURN r"
+
+    params = {"id": resource_id, **fields}
+
+    try:
+        result = await db.run(query, params)
+        record = await result.single()
+
+        if not record:
+            raise HTTPException(status_code=404, detail="Resource not found")
+
+        return schemas.Resource(**dict(record["r"]))
+    except Exception as e:
+        logger.error(f"Error updating resource: {e}")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@app.delete("/api/v1/resources/{resource_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_resource(resource_id: str, db: AsyncSession = Depends(get_db_session)):
+    """
+    Deletes a resource node and all its links to concepts.
+    """
+    query = "MATCH (r:Resource {id: $id}) DETACH DELETE r"
+
+    try:
+        # Check existence
+        check = await db.run(
+            "MATCH (r:Resource {id: $id}) RETURN r", {"id": resource_id}
+        )
+        if not await check.single():
+            raise HTTPException(status_code=404, detail="Resource not found")
+
+        await db.run(query, {"id": resource_id})
+        logger.info(f"Deleted resource {resource_id}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting resource: {e}")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@app.delete(
+    "/api/v1/concepts/{concept_id}/resources/{resource_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def remove_resource_from_concept(
+    concept_id: str, resource_id: str, db: AsyncSession = Depends(get_db_session)
+):
+    """
+    Removes the HAS_RESOURCE relationship between a specific concept and resource.
+    Does NOT delete the resource itself.
+    """
+    query = (
+        "MATCH (c:Concept {id: $cid})-[rel:HAS_RESOURCE]->(r:Resource {id: $rid}) "
+        "DELETE rel"
+    )
+
+    try:
+        # Check relationship existence
+        check_query = (
+            "MATCH (c:Concept {id: $cid})-[rel:HAS_RESOURCE]->(r:Resource {id: $rid}) "
+            "RETURN rel"
+        )
+        check = await db.run(check_query, {"cid": concept_id, "rid": resource_id})
+        if not await check.single():
+            raise HTTPException(
+                status_code=404, detail="Link between Concept and Resource not found"
+            )
+
+        await db.run(query, {"cid": concept_id, "rid": resource_id})
+        logger.info(f"Unlinked resource {resource_id} from concept {concept_id}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error unlinking resource: {e}")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@app.post("/api/v1/uploads", status_code=status.HTTP_201_CREATED)
+async def upload_file(request: Request, file: UploadFile = File(...)):
+    """
+    Uploads a file to the server and returns a direct URL.
+    """
+    try:
+        # 1. Generate unique filename to prevent overwrites
+        file_ext = file.filename.split(".")[-1] if "." in file.filename else "bin"
+        unique_name = f"{uuid.uuid4()}.{file_ext}"
+        file_path = os.path.join(UPLOAD_DIR, unique_name)
+
+        # 2. Save file to disk
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+
+        # 3. Construct Public URL
+        # We use the request base URL to ensure it works for localhost/10.0.2.2/etc.
+        # Note: request.base_url typically ends with a slash.
+        base_url = str(request.base_url).rstrip("/")
+        # We assume the service is exposed directly or via gateway on the same port for now.
+        # For docker internal, this might return http://alp_kg_service:8000
+        # But for the client (Flutter), we need the external URL.
+        # Since we don't have a reverse proxy configured in code yet, we return a relative path
+        # or rely on the client to know the domain.
+        # Ideally, we return the full accessible URL.
+
+        # Simple solution for MVP: Return the path relative to the service root
+        file_url = f"{base_url}/static/{unique_name}"
+
+        return {
+            "filename": unique_name,
+            "url": file_url,
+            "content_type": file.content_type,
+        }
+
+    except Exception as e:
+        logger.error(f"File upload failed: {e}")
+        raise HTTPException(status_code=500, detail="File upload failed") from e
 
 
 @app.get("/health")

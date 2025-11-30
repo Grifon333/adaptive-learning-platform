@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:adaptive_learning_app/features/admin_graph/presentation/screens/admin_graph_screen.dart';
 import 'package:adaptive_learning_app/features/auth/domain/bloc/auth_bloc.dart';
 import 'package:adaptive_learning_app/features/auth/presentation/screens/login_screen.dart';
 import 'package:adaptive_learning_app/features/auth/presentation/screens/register_screen.dart';
@@ -122,6 +123,8 @@ class AppRouter {
             return AssessmentScreen(goalConceptId: goalId);
           },
         ),
+
+        GoRoute(path: '/admin-graph', name: 'admin_graph', builder: (context, state) => const AdminGraphScreen()),
       ],
     );
   }

@@ -1,4 +1,5 @@
 import 'package:adaptive_learning_app/features/learning_path/data/dto/learning_path_dtos.dart';
+import 'package:adaptive_learning_app/features/learning_path/presentation/widgets/lesson_markdown_viewer.dart';
 import 'package:adaptive_learning_app/features/learning_path/presentation/widgets/lesson_web_viewer.dart';
 import 'package:adaptive_learning_app/features/learning_path/presentation/widgets/lesson_youtube_player.dart';
 import 'package:flutter/material.dart';
@@ -156,8 +157,17 @@ class _ContentArea extends StatelessWidget {
     // Simple logic to determine type.
     // Ideally, this should be an enum from the DTO.
     final url = resource!.url;
-    final isVideo = resource!.type.toLowerCase().contains('video') || url.contains('youtube');
-    return isVideo ? LessonYoutubePlayer(key: ValueKey(url), url: url) : LessonWebViewer(key: ValueKey(url), url: url);
+    final type = resource!.type.toLowerCase();
+
+    // [Updated Logic]
+    if (type.contains('video') || url.contains('youtube')) return LessonYoutubePlayer(key: ValueKey(url), url: url);
+
+    if (type.contains('markdown') || type.contains('text') || url.endsWith('.md') || url.endsWith('.txt')) {
+      return LessonMarkdownViewer(key: ValueKey(url), url: url);
+    }
+
+    // Default fallback for HTML/PDF/Other
+    return LessonWebViewer(key: ValueKey(url), url: url);
   }
 }
 

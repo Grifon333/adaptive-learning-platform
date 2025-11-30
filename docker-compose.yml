@@ -37,9 +37,9 @@ services:
       - neo4j_data:/data
     healthcheck:
       test: ["CMD-SHELL", "cypher-shell -u ${NEO4J_USER} -p ${NEO4J_PASSWORD} 'RETURN 1'"]
-      interval: 20s
+      interval: 10s
       timeout: 10s
-      retries: 15
+      retries: 5
       start_period: 30s
     networks:
       - adaptive_network
@@ -110,6 +110,8 @@ services:
     depends_on:
       neo4j:
         condition: service_healthy
+    volumes:
+      - kg_uploads:/app/uploads
     networks:
       - adaptive_network
 
@@ -226,6 +228,7 @@ volumes:
   neo4j_data:
   mongo_data:
   redis_data:
+  kg_uploads:
 
 networks:
   adaptive_network:
