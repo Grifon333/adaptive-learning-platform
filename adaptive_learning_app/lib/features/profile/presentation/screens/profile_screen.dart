@@ -3,6 +3,7 @@ import 'package:adaptive_learning_app/app/app_context_ext.dart';
 import 'package:adaptive_learning_app/features/auth/domain/bloc/auth_bloc.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:adaptive_learning_app/features/profile/domain/bloc/profile_bloc.dart';
+import 'package:go_router/go_router.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -54,7 +55,25 @@ class _ProfileScreenView extends StatelessWidget {
                 },
               ),
               const SizedBox(height: 32),
-
+              Card(
+                color: Colors.blue.shade50,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: BorderSide(color: Colors.blue.shade200),
+                ),
+                child: ListTile(
+                  leading: const Icon(Icons.admin_panel_settings, color: Colors.blue),
+                  title: const Text(
+                    'Manage Knowledge Graph',
+                    style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold),
+                  ),
+                  subtitle: const Text('Admin Only'),
+                  trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.blue),
+                  onTap: () => context.pushNamed('admin_graph'),
+                ),
+              ),
+              const SizedBox(height: 16),
               ElevatedButton.icon(
                 onPressed: () => _logout(context),
                 icon: const Icon(Icons.logout),

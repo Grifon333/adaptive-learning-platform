@@ -16,8 +16,19 @@ class ResourceCreate(ResourceBase):
 
 class Resource(ResourceBase):
     id: str
-
     model_config = {"from_attributes": True}
+
+
+class ResourceUpdate(BaseModel):
+    title: str | None = None
+    type: str | None = Field(default=None, description="video, article, quiz, etc.")
+    url: str | None = None
+    duration: int | None = Field(default=None, description="Duration in minutes")
+
+
+class ResourceListResponse(BaseModel):
+    total: int
+    items: list[Resource]
 
 
 # --- Concept Schemas ---
@@ -37,10 +48,19 @@ class ConceptCreate(ConceptBase):
 class Concept(ConceptBase):
     id: str
     resources: list[Resource] = []
+    model_config = {"from_attributes": True}
 
-    model_config = {
-        "from_attributes": True  # Allows mapping from objects (e.g., Neo4j nodes)
-    }
+
+class ConceptUpdate(BaseModel):
+    name: str | None = None
+    description: str | None = None
+    difficulty: float | None = Field(default=None, ge=1.0, le=10.0)
+    estimated_time: int | None = Field(default=None, ge=0)
+
+
+class ConceptListResponse(BaseModel):
+    total: int
+    items: list[Concept]
 
 
 # --- Relationship & Path Schemas ---
@@ -50,6 +70,12 @@ class RelationshipCreate(BaseModel):
     start_concept_id: str
     end_concept_id: str
     rel_type: str = Field(default="PREREQUISITE", alias="type")
+
+
+class RelationshipDelete(BaseModel):
+    start_concept_id: str
+    end_concept_id: str
+    rel_type: str = "PREREQUISITE"
 
 
 class ResourceLink(BaseModel):
@@ -89,7 +115,6 @@ class Question(BaseModel):
     text: str
     options: list[QuestionOption]
     difficulty: float = 1.0
-
     model_config = {"from_attributes": True}
 
 
