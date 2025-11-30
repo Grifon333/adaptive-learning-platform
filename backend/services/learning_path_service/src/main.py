@@ -31,6 +31,28 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Learning Path Service", lifespan=lifespan)
 
 
+async def _get_student_profile(
+    client: httpx.AsyncClient, student_id: str, auth_header: str
+) -> schemas.StudentProfile | None:
+    """
+    Fetches student profile from User Service.
+    """
+    url = f"{config.settings.USER_SERVICE_URL}/api/v1/users/{student_id}/profile"  # Assuming admin/internal endpoint
+    # OR reuse /me/profile if we proxy the user's token.
+    # Since the request comes FROM the user, we can use /me/profile with their token.
+    url = f"{config.settings.USER_SERVICE_URL}/api/v1/users/me/profile"
+
+    try:
+        resp = await client.get(url, headers={"Authorization": auth_header})
+        if resp.status_code == 200:
+            return schemas.StudentProfile(**resp.json())
+        logger.warning(f"Could not fetch profile: {resp.status_code}")
+        return None
+    except Exception as e:
+        logger.error(f"Error fetching profile: {e}")
+        return None
+
+
 def get_http_client() -> httpx.AsyncClient:
     """FastAPI dependency to provide the HTTP client."""
     return client_store["client"]
@@ -99,6 +121,19 @@ async def _save_path_to_user_service(
         ) from e
 
 
+async def _fetch_kg_candidates(
+    client: httpx.AsyncClient, end_id: str, start_id: str | None = None
+) -> list[schemas.KGSPathCandidate]:
+    kgs_url = f"{config.settings.KG_SERVICE_URL}/api/v1/path/candidates"
+    params = {"end_id": end_id, "limit": 3}  # Get top 3 structural paths
+    if start_id:
+        params["start_id"] = start_id
+
+    resp = await client.get(kgs_url, params=params)
+    resp.raise_for_status()
+    return schemas.KGSMultiPathResponse(**resp.json()).candidates
+
+
 @app.post(
     "/api/v1/students/{student_id}/learning-paths",
     response_model=schemas.LearningPathResponse,
@@ -110,14 +145,6 @@ async def create_learning_path(
     authorization: str | None = Header(None),
     client: httpx.AsyncClient = Depends(get_http_client),
 ):
-    """
-    Main orchestration endpoint.
-    1. Receives a request from the client (Flutter).
-    2. Calls the Knowledge Graph Service (KGS) to obtain the route.
-    3. Transforms the data.
-    4. Calls the User Service (US) to save the route.
-    5. Returns the saved route to the client.
-    """
     logger.info(f"Received path request for student {student_id}...")
     str_student_id = str(student_id)
 
@@ -125,35 +152,49 @@ async def create_learning_path(
         raise HTTPException(status_code=401, detail="Authorization header missing")
 
     # 1. Get Raw Path from KGS
-    kgs_data = await _fetch_kg_path(
+    candidates = await _fetch_kg_candidates(
         client, request.goal_concept_id, request.start_concept_id
     )
 
-    if not kgs_data.path:
-        raise HTTPException(status_code=404, detail="No path found")
+    if not candidates:
+        raise HTTPException(status_code=404, detail="No viable path found")
 
-    # 2. Batch Fetch Mastery
-    logger.info("Fetching mastery levels...")
-    all_concept_ids = [c.id for c in kgs_data.path]
-    mastery_map = await _get_mastery_batch(client, str_student_id, all_concept_ids)
+    # 2. Batch Fetch Mastery (for ALL concepts in ALL candidates to be safe)
+    # Flatten unique concept IDs
+    unique_ids = set()
+    for cand in candidates:
+        for c in cand.concepts:
+            unique_ids.add(c.id)
 
-    # 3. Apply Adaptation Engine
-    logger.info("Running Adaptation Engine...")
+    mastery_map = await _get_mastery_batch(client, str_student_id, list(unique_ids))
+
+    # 3. Fetch Profile
+    profile = await _get_student_profile(client, str_student_id, authorization)
+
+    # 4. SELECT BEST PATH
+    best_path_concepts = adaptation_engine.select_optimal_path(
+        candidates, profile, mastery_map
+    )
+
+    # 5. ADAPT BEST PATH (Linearize, add remedial, etc.)
+    # Note: select_optimal_path returns list[KGSConcept]
     us_steps, total_time = adaptation_engine.generate_adaptive_steps(
-        kgs_data.path, mastery_map
+        best_path_concepts, mastery_map, profile
     )
 
     if not us_steps:
-        # If the student knows EVERYTHING, we return a special answer or create an empty path.
         logger.info("Student already knows the entire path!")
-        # In reality, maybe return a message about the completion of the course here.
+        us_path_data = schemas.USLearningPathCreate(
+            goal_concepts=[request.goal_concept_id], steps=[], estimated_time=0
+        )
+    else:
+        us_path_data = schemas.USLearningPathCreate(
+            goal_concepts=[request.goal_concept_id],
+            steps=us_steps,
+            estimated_time=total_time,
+        )
 
-    # 4. Save to User Service
-    us_path_data = schemas.USLearningPathCreate(
-        goal_concepts=[request.goal_concept_id],
-        steps=us_steps,
-        estimated_time=total_time,
-    )
+    # 5. Save to User Service
     final_path = await _save_path_to_user_service(
         client, us_path_data, {"Authorization": authorization}
     )

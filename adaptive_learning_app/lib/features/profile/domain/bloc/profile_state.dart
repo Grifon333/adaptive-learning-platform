@@ -7,23 +7,20 @@ sealed class ProfileState extends Equatable {
   List<Object> get props => [];
 }
 
-final class ProfileInitialState extends ProfileState {}
+final class ProfileInitial extends ProfileState {}
 
-final class ProfileWaitingState extends ProfileState {}
+final class ProfileLoading extends ProfileState {}
 
-final class ProfileErrorState extends ProfileState {
-  const ProfileErrorState({required this.message, required this.error, this.stackTrace});
-  final String message;
-  final Object error;
-  final StackTrace? stackTrace;
-
+final class ProfileLoaded extends ProfileState {
+  const ProfileLoaded(this.profile);
+  final StudentProfileDto profile;
   @override
-  List<Object> get props => [message, error];
+  List<Object> get props => [profile];
 }
 
-final class ProfileSuccessState extends ProfileState {
-  const ProfileSuccessState({required this.data});
-  final String data;
+final class ProfileError extends ProfileState {
+  const ProfileError(this.message);
+  final String message;
   @override
-  List<Object> get props => [data];
+  List<Object> get props => [message];
 }
