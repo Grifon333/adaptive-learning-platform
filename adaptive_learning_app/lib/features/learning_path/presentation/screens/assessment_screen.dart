@@ -58,7 +58,12 @@ class _AssessmentViewState extends State<_AssessmentView> {
         },
         builder: (context, state) {
           if (state is AssessmentLoading) {
-            return const Center(child: CircularProgressIndicator());
+            return const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [CircularProgressIndicator(), SizedBox(height: 16), Text("Analyzing your results...")],
+              ),
+            );
           }
           if (state is AssessmentInProgress) {
             final questions = state.session.questions;

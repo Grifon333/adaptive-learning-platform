@@ -7,9 +7,12 @@ sealed class ProfileEvent extends Equatable {
   List<Object> get props => [];
 }
 
-final class ProfileFetchProfileEvent extends ProfileEvent {
-  const ProfileFetchProfileEvent({required this.id});
-  final String id;
+final class ProfileLoadRequested extends ProfileEvent {}
+
+final class ProfileUpdateRequested extends ProfileEvent {
+  const ProfileUpdateRequested({required this.cognitive, required this.preferences});
+  final Map<String, dynamic> cognitive;
+  final Map<String, dynamic> preferences;
   @override
-  List<Object> get props => [id];
+  List<Object> get props => [cognitive, preferences];
 }

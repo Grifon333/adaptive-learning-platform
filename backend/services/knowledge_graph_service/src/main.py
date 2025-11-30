@@ -796,6 +796,88 @@ async def upload_file(request: Request, file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail="File upload failed") from e
 
 
+@app.get("/api/v1/path/candidates", response_model=schemas.MultiPathResponse)
+async def get_path_candidates(
+    end_id: str,
+    start_id: str | None = None,
+    limit: int = 5,
+    db: AsyncSession = Depends(get_db_session),
+):
+    """
+    Finds up to 'limit' distinct paths from Start to End.
+    """
+    # 1. Base Query Construction
+    if not start_id:
+        # Fallback for "Goal Only" mode: Find paths from any root to the goal
+        base_match = (
+            "MATCH (end:Concept {id: $end_id}) "
+            "MATCH p = (start:Concept)-[:PREREQUISITE*]->(end) "
+            "WHERE NOT (start)<-[:PREREQUISITE]-() "
+        )
+        params = {"end_id": end_id, "limit": limit}
+    else:
+        # Path from A to B (limiting length to prevent exponential explosion)
+        base_match = (
+            "MATCH (start:Concept {id: $start_id}), (end:Concept {id: $end_id}) "
+            "MATCH p = (start)-[:PREREQUISITE*..15]->(end) "
+        )
+        params = {"start_id": start_id, "end_id": end_id, "limit": limit}
+
+    # 2. Optimized Query with Resource Projection
+    # We use UNWIND and collect() to fetch all concepts AND their resources in a single DB hit.
+    query = (
+        f"{base_match} "
+        "WITH p, reduce(d=0.0, n in nodes(p) | d + n.difficulty) as diff, "
+        "reduce(t=0, n in nodes(p) | t + n.estimated_time) as time "
+        "ORDER BY length(p) ASC "
+        "LIMIT $limit "
+        "UNWIND nodes(p) as c "
+        "OPTIONAL MATCH (c)-[:HAS_RESOURCE]->(r:Resource) "
+        "WITH p, diff, time, c, collect(r) as resources "
+        "WITH p, diff, time, collect({concept: c, resources: resources}) as full_path "
+        "RETURN full_path, diff, time"
+    )
+
+    try:
+        result = await db.run(query, params)
+        records = [record async for record in result]
+
+        candidates = []
+        for record in records:
+            # full_path is a list of objects: [{concept: Node, resources: [Node, Node]}, ...]
+            full_path_data = record["full_path"]
+
+            concepts_list = []
+            for item in full_path_data:
+                c_node = item["concept"]
+                r_nodes = item["resources"]
+
+                # Convert Resource Nodes to Pydantic Models
+                res_objs = [schemas.Resource(**dict(r)) for r in r_nodes if r]
+
+                # Convert Concept Node to Pydantic Model (attaching resources)
+                concepts_list.append(
+                    schemas.Concept(**dict(c_node), resources=res_objs)
+                )
+
+            candidates.append(
+                schemas.PathCandidate(
+                    id=str(
+                        uuid.uuid4()
+                    ),  # Generate ephemeral ID for this candidate path
+                    concepts=concepts_list,
+                    total_difficulty=record["diff"],
+                    total_time=record["time"],
+                )
+            )
+
+        return schemas.MultiPathResponse(candidates=candidates)
+
+    except Exception as e:
+        logger.error(f"Error finding candidates: {e}")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
 @app.get("/health")
 def health_check():
     return {"status": "ok", "service": "Knowledge Graph Service"}

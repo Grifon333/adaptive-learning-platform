@@ -1,3 +1,4 @@
+import 'package:adaptive_learning_app/features/profile/presentation/screens/profile_preferences_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:adaptive_learning_app/app/app_context_ext.dart';
 import 'package:adaptive_learning_app/features/auth/domain/bloc/auth_bloc.dart';
@@ -10,13 +11,8 @@ class ProfileScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final profileRepository = context.di.repositories.profileRepository;
-    final authState = context.read<AuthBloc>().state;
-    String userId = 'unknown';
-    if (authState is AuthAuthenticated) userId = authState.userId;
-
     return BlocProvider(
-      create: (context) => ProfileBloc(profileRepository)..add(ProfileFetchProfileEvent(id: userId)),
+      create: (context) => ProfileBloc(context.di.repositories.profileRepository)..add(ProfileLoadRequested()),
       child: const _ProfileScreenView(),
     );
   }
@@ -25,69 +21,106 @@ class ProfileScreen extends StatelessWidget {
 class _ProfileScreenView extends StatelessWidget {
   const _ProfileScreenView();
 
-  void _logout(BuildContext context) {
-    context.read<AuthBloc>().add(AuthLogoutRequested());
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Profile')),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              BlocBuilder<ProfileBloc, ProfileState>(
-                builder: (context, state) {
-                  return switch (state) {
-                    ProfileSuccessState() => Card(
-                      child: ListTile(
-                        leading: const Icon(Icons.person, size: 40),
-                        title: Text('Name: ${state.props.first}'),
-                        subtitle: const Text('Your level: Beginner'),
-                      ),
-                    ),
-                    ProfileErrorState() => Text('Error: ${state.message}'),
-                    _ => const Center(child: CircularProgressIndicator()),
-                  };
-                },
-              ),
-              const SizedBox(height: 32),
-              Card(
-                color: Colors.blue.shade50,
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  side: BorderSide(color: Colors.blue.shade200),
+      body: BlocBuilder<ProfileBloc, ProfileState>(
+        builder: (context, state) {
+          if (state is ProfileLoading) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (state is ProfileError) {
+            return Center(child: Text('Error: ${state.message}'));
+          }
+          if (state is ProfileLoaded) {
+            final p = state.profile;
+            return ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                const CircleAvatar(radius: 40, child: Icon(Icons.person, size: 40)),
+                const SizedBox(height: 16),
+                Center(
+                  child: Text('User ID: ...${p.userId.substring(0, 6)}', style: const TextStyle(color: Colors.grey)),
                 ),
-                child: ListTile(
-                  leading: const Icon(Icons.admin_panel_settings, color: Colors.blue),
-                  title: const Text(
-                    'Manage Knowledge Graph',
-                    style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold),
+                const SizedBox(height: 32),
+
+                Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.tune, color: Colors.blue),
+                    title: const Text('Learning Preferences'),
+                    subtitle: const Text('Adjust how AI generates your path'),
+                    trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => BlocProvider.value(
+                            value: context.read<ProfileBloc>(),
+                            child: ProfilePreferencesScreen(profile: p),
+                          ),
+                        ),
+                      );
+                    },
                   ),
-                  subtitle: const Text('Admin Only'),
-                  trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.blue),
-                  onTap: () => context.pushNamed('admin_graph'),
                 ),
-              ),
-              const SizedBox(height: 16),
-              ElevatedButton.icon(
-                onPressed: () => _logout(context),
-                icon: const Icon(Icons.logout),
-                label: const Text('Log out'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
+
+                const SizedBox(height: 16),
+                // Card(
+                //   color: Colors.blue.shade50,
+                //   child: ListTile(
+                //     leading: const Icon(Icons.admin_panel_settings, color: Colors.blue),
+                //     title: const Text('Manage Knowledge Graph'),
+                //     onTap: () => context.pushNamed('admin_graph'),
+                //   ),
+                // ),
+                Card(
+                  color: Colors.blue.shade50,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: BorderSide(color: Colors.blue.shade200),
+                  ),
+                  child: ListTile(
+                    leading: const Icon(Icons.admin_panel_settings, color: Colors.blue),
+                    title: const Text(
+                      'Manage Knowledge Graph',
+                      style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold),
+                    ),
+                    trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.blue),
+                    onTap: () => context.pushNamed('admin_graph'),
+                  ),
                 ),
-              ),
-            ],
-          ),
-        ),
+
+                const SizedBox(height: 32),
+                OutlinedButton(
+                  onPressed: () => context.read<AuthBloc>().add(AuthLogoutRequested()),
+                  child: const Text('Log Out'),
+                ),
+              ],
+            );
+          }
+          return const SizedBox.shrink();
+        },
       ),
     );
   }
 }
+
+
+
+
+// Card(
+//                 color: Colors.blue.shade50,
+//                 shape: RoundedRectangleBorder(
+//                   borderRadius: BorderRadius.circular(12),
+//                   side: BorderSide(color: Colors.blue.shade200),
+//                 ),
+//                 child: ListTile(
+//                   leading: const Icon(Icons.admin_panel_settings, color: Colors.blue),
+//                   title: const Text(
+//                     'Manage Knowledge Graph',
+//                     style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold),
+//                   ),
+//                   trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.blue),
+//                   onTap: () => context.pushNamed('admin_graph'),
+//                 ),
+//               ),

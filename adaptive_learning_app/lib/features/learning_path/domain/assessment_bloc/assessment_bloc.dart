@@ -9,15 +9,15 @@ part 'assessment_event.dart';
 part 'assessment_state.dart';
 
 class AssessmentBloc extends Bloc<AssessmentEvent, AssessmentState> {
-  final ILearningPathRepository _repository;
-  String? _studentId;
-  String? _goalConceptId;
-
   AssessmentBloc({required ILearningPathRepository repository}) : _repository = repository, super(AssessmentInitial()) {
     on<AssessmentStarted>(_onStarted);
     on<AssessmentAnswered>(_onAnswered);
     on<AssessmentSubmitted>(_onSubmitted);
   }
+
+  final ILearningPathRepository _repository;
+  String? _studentId;
+  String? _goalConceptId;
 
   Future<void> _onStarted(AssessmentStarted event, Emitter<AssessmentState> emit) async {
     emit(AssessmentLoading());

@@ -1,6 +1,7 @@
 import 'package:adaptive_learning_app/app/app_config/app_config.dart';
 import 'package:adaptive_learning_app/app/http/i_http_client.dart';
 import 'package:adaptive_learning_app/features/learning_path/data/dto/assessment_dtos.dart';
+import 'package:adaptive_learning_app/features/learning_path/data/dto/concept_dto.dart';
 import 'package:adaptive_learning_app/features/learning_path/data/dto/learning_path_dtos.dart';
 import 'package:adaptive_learning_app/features/learning_path/data/dto/quiz_dtos.dart';
 import 'package:adaptive_learning_app/features/learning_path/domain/repository/i_learning_path_repository.dart';
@@ -73,5 +74,18 @@ final class LearningPathRepository implements ILearningPathRepository {
     final serviceUrl = appConfig.learningPathServiceUrl;
     final response = await httpClient.post('$serviceUrl/assessments/submit', data: submission.toJson());
     return LearningPathDto.fromJson(response.data);
+  }
+
+  @override
+  Future<List<ConceptDto>> getConcepts() async {
+    final serviceUrl = appConfig.knowledgeGraphServiceUrl;
+
+    // We request a larger limit to get all concepts for the selector
+    final response = await httpClient.get('$serviceUrl/concepts?limit=100');
+
+    final data = response.data as Map<String, dynamic>;
+    final items = data['items'] as List;
+
+    return items.map((e) => ConceptDto.fromJson(e as Map<String, dynamic>)).toList();
   }
 }

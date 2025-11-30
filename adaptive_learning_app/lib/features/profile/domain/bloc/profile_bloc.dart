@@ -1,3 +1,4 @@
+import 'package:adaptive_learning_app/features/profile/data/dto/student_profile_dto.dart';
 import 'package:adaptive_learning_app/features/profile/domain/repository/i_profile_repository.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
@@ -7,24 +8,31 @@ part 'profile_event.dart';
 part 'profile_state.dart';
 
 class ProfileBloc extends Bloc<ProfileEvent, ProfileState> {
-  ProfileBloc(this._profileRepository) : super(ProfileInitialState()) {
-    on<ProfileEvent>((event, emit) async {
-      if (event is ProfileFetchProfileEvent) {
-        await _fetchProfile(event, emit);
-      }
-    });
+  ProfileBloc(this._repository) : super(ProfileInitial()) {
+    on<ProfileLoadRequested>(_onLoad);
+    on<ProfileUpdateRequested>(_onUpdate);
   }
 
-  final IProfileRepository _profileRepository;
+  final IProfileRepository _repository;
 
-  Future<void> _fetchProfile(ProfileFetchProfileEvent event, Emitter<ProfileState> emit) async {
+  Future<void> _onLoad(ProfileLoadRequested event, Emitter<ProfileState> emit) async {
+    emit(ProfileLoading());
     try {
-      emit(ProfileWaitingState());
-      final data = await _profileRepository.fetchUserProfile(event.id);
-      emit(ProfileSuccessState(data: data));
-    } on Object catch (error, stackTrace) {
-      emit(ProfileErrorState(message: 'Error loading profile', error: error, stackTrace: stackTrace));
-      addError(error, stackTrace);
+      final profile = await _repository.fetchUserProfile();
+      emit(ProfileLoaded(profile));
+    } on Object catch (e) {
+      emit(ProfileError(e.toString()));
+    }
+  }
+
+  Future<void> _onUpdate(ProfileUpdateRequested event, Emitter<ProfileState> emit) async {
+    emit(ProfileLoading());
+    try {
+      final updates = {'cognitive_profile': event.cognitive, 'learning_preferences': event.preferences};
+      final profile = await _repository.updateUserProfile(updates);
+      emit(ProfileLoaded(profile));
+    } on Object catch (e) {
+      emit(ProfileError("Update failed: $e"));
     }
   }
 }

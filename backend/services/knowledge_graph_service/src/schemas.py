@@ -136,3 +136,14 @@ class ConceptQuestions(BaseModel):
 
 class BatchQuestionsResponse(BaseModel):
     data: list[ConceptQuestions]
+
+
+class PathCandidate(BaseModel):
+    id: str  # internal ID for debugging
+    concepts: list[Concept]
+    total_difficulty: float
+    total_time: int
+
+
+class MultiPathResponse(BaseModel):
+    candidates: list[PathCandidate]
