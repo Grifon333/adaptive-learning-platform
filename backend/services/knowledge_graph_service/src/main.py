@@ -476,7 +476,11 @@ async def get_all_concepts(
     # 1. Count Total
     count_query = "MATCH (c:Concept) RETURN count(c) as total"
     count_result = await db.run(count_query)
-    total = (await count_result.single())["total"]
+    count = await count_result.single()
+    if count is None:
+        total = 0
+    else:
+        total = count["total"]
 
     # 2. Fetch Items
     query = (
@@ -636,7 +640,11 @@ async def get_all_resources(
     # 1. Count Total
     count_query = "MATCH (r:Resource) RETURN count(r) as total"
     count_result = await db.run(count_query)
-    total = (await count_result.single())["total"]
+    count = await count_result.single()
+    if count is None:
+        total = 0
+    else:
+        total = count["total"]
 
     # 2. Fetch Items
     query = (
@@ -750,7 +758,12 @@ async def upload_file(request: Request, file: UploadFile = File(...)):
     """
     try:
         # 1. Generate unique filename to prevent overwrites
-        file_ext = file.filename.split(".")[-1] if "." in file.filename else "bin"
+        filename = file.filename or ""
+        if "." in filename:
+            file_ext = filename.rsplit(".", 1)[-1]
+        else:
+            file_ext = "bin"
+
         unique_name = f"{uuid.uuid4()}.{file_ext}"
         file_path = os.path.join(UPLOAD_DIR, unique_name)
 
