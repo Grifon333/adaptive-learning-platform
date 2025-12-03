@@ -75,7 +75,7 @@ class _App extends StatelessWidget {
       secureStorage: diContainer.services.secureStorage,
     );
     final learningPathBloc = LearningPathBloc(repository: diContainer.repositories.learningPathRepository);
-    final router = AppRouter.createRouter(diContainer.debugService, authBloc);
+    final router = AppRouter.createRouter(diContainer.debugService, authBloc, diContainer.services.trackingService);
 
     return DependsProviders(
       diContainer: diContainer,

@@ -22,9 +22,7 @@ def get_mongo_collection():
 @celery_app.task(name="process_event_ingestion")
 def process_event_ingestion(event_data: dict):
     """
-    The main task of the worker:
-    1. Save to MongoDB.
-    2. If it is a test -> send the task to ML Worker.
+    Single event processing.
     """
     logger.info(f"Worker received event: {event_data.get('event_type')}")
 
@@ -38,19 +36,55 @@ def process_event_ingestion(event_data: dict):
 
     loop.run_until_complete(_save_to_mongo(event_data))
 
-    # 2. Trigger ML Pipeline (Cross-service communication via Redis)
+    # Trigger ML Pipeline
     if event_data.get("event_type") == "QUIZ_SUBMIT":
         _trigger_ml_processing(event_data)
+
+
+@celery_app.task(name="process_batch_event_ingestion")
+def process_batch_event_ingestion(events_data: list[dict]):
+    """
+    Batch event processing (optimized).
+    """
+    count = len(events_data)
+    logger.info(f"Worker received BATCH of {count} events")
+
+    if count == 0:
+        return
+
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+    # 1. Bulk Save
+    loop.run_until_complete(_save_batch_to_mongo(events_data))
+
+    # 2. Check triggers for every event in the batch
+    # (e.g. user completed a quiz offline, now we sync and must update ML)
+    for event in events_data:
+        if event.get("event_type") == "QUIZ_SUBMIT":
+            _trigger_ml_processing(event)
 
 
 async def _save_to_mongo(data: dict):
     try:
         collection = get_mongo_collection()
         await collection.insert_one(data)
-        logger.info(f"Event saved to MongoDB: {data.get('id')}")
+        logger.debug(f"Event saved to MongoDB: {data.get('id')}")
     except Exception as e:
         logger.error(f"Failed to save event to Mongo: {e}")
-        # Maybe add self.retry() here.
+
+
+async def _save_batch_to_mongo(data_list: list[dict]):
+    try:
+        collection = get_mongo_collection()
+        # insert_many is much faster for lists
+        result = await collection.insert_many(data_list)
+        logger.info(f"Batch saved {len(result.inserted_ids)} events to MongoDB")
+    except Exception as e:
+        logger.error(f"Failed to save batch to Mongo: {e}")
 
 
 def _trigger_ml_processing(event_data: dict):

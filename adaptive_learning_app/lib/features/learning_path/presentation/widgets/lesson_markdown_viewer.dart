@@ -1,3 +1,4 @@
+import 'package:adaptive_learning_app/app/app_context_ext.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
@@ -15,6 +16,7 @@ class _LessonMarkdownViewerState extends State<LessonMarkdownViewer> {
   String? _content;
   bool _isLoading = true;
   String? _error;
+  DateTime _lastScrollLog = DateTime.now();
 
   @override
   void initState() {
@@ -44,6 +46,28 @@ class _LessonMarkdownViewerState extends State<LessonMarkdownViewer> {
     }
   }
 
+  bool _onScroll(ScrollNotification notification) {
+    if (notification is ScrollEndNotification) {
+      final now = DateTime.now();
+      // Throttle logs: max 1 per 2 seconds to avoid spam
+      if (now.difference(_lastScrollLog).inSeconds > 2) {
+        final metrics = notification.metrics;
+        final progress = metrics.maxScrollExtent > 0 ? (metrics.pixels / metrics.maxScrollExtent) : 1.0;
+
+        context.di.services.trackingService.log(
+          'CONTENT_SCROLL',
+          metadata: {
+            'url': widget.url,
+            'scroll_percentage': (progress * 100).toInt(),
+            'pixels': metrics.pixels.toInt(),
+          },
+        );
+        _lastScrollLog = now;
+      }
+    }
+    return false;
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) return const Center(child: CircularProgressIndicator());
@@ -62,13 +86,16 @@ class _LessonMarkdownViewerState extends State<LessonMarkdownViewer> {
       );
     }
 
-    return Markdown(
-      data: _content ?? '',
-      selectable: true,
-      styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
-        p: const TextStyle(fontSize: 16, height: 1.5),
-        h1: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-        code: const TextStyle(backgroundColor: Color(0xFFEEEEEE), fontFamily: 'monospace'),
+    return NotificationListener<ScrollNotification>(
+      onNotification: _onScroll,
+      child: Markdown(
+        data: _content ?? '',
+        selectable: true,
+        styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
+          p: const TextStyle(fontSize: 16, height: 1.5),
+          h1: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          code: const TextStyle(backgroundColor: Color(0xFFEEEEEE), fontFamily: 'monospace'),
+        ),
       ),
     );
   }
