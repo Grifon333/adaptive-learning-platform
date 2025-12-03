@@ -13,9 +13,10 @@ class QuizScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
-      create: (context) =>
-          StepQuizBloc(repository: context.di.repositories.learningPathRepository)
-            ..add(LoadQuizRequested(conceptId: conceptId)),
+      create: (context) => StepQuizBloc(
+        repository: context.di.repositories.learningPathRepository,
+        trackingService: context.di.services.trackingService,
+      )..add(LoadQuizRequested(conceptId: conceptId)),
       child: _QuizScreenView(stepId: stepId, conceptId: conceptId),
     );
   }

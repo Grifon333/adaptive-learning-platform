@@ -38,6 +38,9 @@ final class DiContainer {
     repositories = DiRepositories()..init(onProgress: onProgress, onError: onError, diContainer: this);
     onProgress('DiRepositories');
 
+    await services.initLogic(diContainer: this);
+    onProgress('TrackingService');
+
     onComplete('Dependency initialization is complete.');
   }
 }

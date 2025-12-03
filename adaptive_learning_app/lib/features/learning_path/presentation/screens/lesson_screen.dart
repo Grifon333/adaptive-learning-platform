@@ -1,3 +1,4 @@
+import 'package:adaptive_learning_app/app/app_context_ext.dart';
 import 'package:adaptive_learning_app/features/learning_path/data/dto/learning_path_dtos.dart';
 import 'package:adaptive_learning_app/features/learning_path/domain/lesson_bloc/lesson_bloc.dart';
 import 'package:adaptive_learning_app/features/learning_path/presentation/widgets/lesson_markdown_viewer.dart';
@@ -25,8 +26,22 @@ class _LessonScreenState extends State<LessonScreen> {
     if (widget.step.resources.isNotEmpty) _selectedResource = widget.step.resources.first;
   }
 
-  void _selectResource(ResourceDto recource) {
-    setState(() => _selectedResource = recource);
+  void _selectResource(ResourceDto resource) {
+    setState(() => _selectedResource = resource);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.di.services.trackingService.log(
+          'CONTENT_VIEW',
+          metadata: {
+            'resourceId': resource.id,
+            'title': resource.title,
+            'type': resource.type,
+            'stepId': widget.step.id,
+          },
+        );
+      }
+    });
   }
 
   Future<void> _takeQuiz() async {

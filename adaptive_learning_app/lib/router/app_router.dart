@@ -7,6 +7,8 @@ import 'package:adaptive_learning_app/features/auth/presentation/screens/login_s
 import 'package:adaptive_learning_app/features/auth/presentation/screens/register_screen.dart';
 import 'package:adaptive_learning_app/features/dashboard/presentation/screens/dashboard_screen.dart';
 import 'package:adaptive_learning_app/features/debug/i_debug_service.dart';
+import 'package:adaptive_learning_app/features/events/service/tracking_service.dart';
+import 'package:adaptive_learning_app/features/events/tracking_route_observer.dart';
 import 'package:adaptive_learning_app/features/learning_path/data/dto/learning_path_dtos.dart';
 import 'package:adaptive_learning_app/features/learning_path/domain/lesson_bloc/lesson_bloc.dart';
 import 'package:adaptive_learning_app/features/learning_path/presentation/screens/assessment_screen.dart';
@@ -30,11 +32,23 @@ class AppRouter {
   static final rootNavigatorKey = GlobalKey<NavigatorState>();
   static const String initialLocation = '/splash';
 
-  static GoRouter createRouter(IDebugService debugService, AuthBloc authBloc) {
+  static GoRouter createRouter(IDebugService debugService, AuthBloc authBloc, TrackingService trackingService) {
+    authBloc.stream.listen((state) {
+      if (state is AuthAuthenticated) {
+        trackingService
+          ..userId = state.userId
+          ..log('SESSION_START');
+      } else if (state is AuthUnauthenticated) {
+        trackingService
+          ..log('SESSION_END')
+          ..userId = null;
+      }
+    });
+
     return GoRouter(
       navigatorKey: rootNavigatorKey,
       initialLocation: initialLocation,
-      observers: [debugService.routeObserver],
+      observers: [debugService.routeObserver, TrackingRouteObserver(trackingService)],
       refreshListenable: GoRouterRefreshStream(authBloc.stream),
       redirect: (BuildContext context, GoRouterState state) {
         final authState = authBloc.state;
