@@ -372,12 +372,12 @@ def update_step_progress(
 
     # 2. Update Step Time
     current_step_time = step.actual_time or 0
-    step.actual_time = current_step_time + update_data.time_delta
+    step.actual_time = current_step_time + update_data.time_delta  # type: ignore[assignment]
 
     # 3. Update Status to 'in_progress' if it was pending
     if step.status == "pending":
-        step.status = "in_progress"
-        step.started_at = datetime.now(UTC)
+        step.status = "in_progress"  # type: ignore[assignment]
+        step.started_at = datetime.now(UTC)  # type: ignore[assignment]
 
     # 4. Update Parent Path Time
     # We load the path relationship
@@ -419,8 +419,8 @@ def complete_step(
 
     # 2. Update Step Status
     if step.status != "completed":
-        step.status = "completed"
-        step.completed_at = datetime.now(UTC)
+        step.status = "completed"  # type: ignore[assignment]
+        step.completed_at = datetime.now(UTC)  # type: ignore[assignment]
 
     # 3. Recalculate Path Statistics
     path = step.path
@@ -455,7 +455,7 @@ def complete_step(
     db.commit()
 
     return schemas.StepCompleteResponse(
-        step_id=step.id,
+        step_id=cast(uuid.UUID, step.id),
         status="completed",
         path_completion_percentage=completion_percentage,
         path_is_completed=path_is_completed,
@@ -488,13 +488,13 @@ def update_step_quiz_result(
         raise HTTPException(status_code=404, detail="Step not found")
 
     # 1. Update Score
-    step.score = result.score
+    step.score = result.score  # type: ignore[assignment]
 
     # 2. Handle Completion (only if passed)
     if result.passed:
         if step.status != "completed":
-            step.status = "completed"
-            step.completed_at = datetime.now(UTC)
+            step.status = "completed"  # type: ignore[assignment]
+            step.completed_at = datetime.now(UTC)  # type: ignore[assignment]
 
     # 3. Recalculate Path Stats (Common logic with complete_step)
     path = step.path
@@ -524,8 +524,8 @@ def update_step_quiz_result(
     db.commit()
 
     return schemas.StepCompleteResponse(
-        step_id=step.id,
-        status=step.status,
+        step_id=cast(uuid.UUID, step.id),
+        status=cast(str, step.status),
         path_completion_percentage=path.completion_percentage,
         path_is_completed=path_is_completed,
     )
