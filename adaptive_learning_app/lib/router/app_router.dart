@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:adaptive_learning_app/app/app_context_ext.dart';
 import 'package:adaptive_learning_app/features/admin_graph/presentation/screens/admin_graph_screen.dart';
 import 'package:adaptive_learning_app/features/auth/domain/bloc/auth_bloc.dart';
 import 'package:adaptive_learning_app/features/auth/presentation/screens/login_screen.dart';
@@ -7,6 +8,7 @@ import 'package:adaptive_learning_app/features/auth/presentation/screens/registe
 import 'package:adaptive_learning_app/features/dashboard/presentation/screens/dashboard_screen.dart';
 import 'package:adaptive_learning_app/features/debug/i_debug_service.dart';
 import 'package:adaptive_learning_app/features/learning_path/data/dto/learning_path_dtos.dart';
+import 'package:adaptive_learning_app/features/learning_path/domain/lesson_bloc/lesson_bloc.dart';
 import 'package:adaptive_learning_app/features/learning_path/presentation/screens/assessment_screen.dart';
 import 'package:adaptive_learning_app/features/learning_path/presentation/screens/concept_selector_screen.dart';
 import 'package:adaptive_learning_app/features/learning_path/presentation/screens/create_path_mode_screen.dart';
@@ -18,6 +20,7 @@ import 'package:adaptive_learning_app/features/profile/presentation/screens/prof
 import 'package:adaptive_learning_app/features/root/root_screen.dart';
 import 'package:adaptive_learning_app/features/splash/splash_screen.dart';
 import 'package:flutter/widgets.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
 /// {@template app_router}
@@ -103,7 +106,12 @@ class AppRouter {
           name: 'lesson',
           builder: (context, state) {
             final step = state.extra as LearningStepDto;
-            return LessonScreen(step: step);
+            return BlocProvider(
+              create: (ctx) =>
+                  LessonBloc(repository: ctx.di.repositories.learningPathRepository, stepId: step.id)
+                    ..add(LessonStarted()),
+              child: LessonScreen(step: step),
+            );
           },
         ),
         GoRoute(

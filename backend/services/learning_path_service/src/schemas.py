@@ -112,6 +112,18 @@ class QuizResponse(BaseModel):
     questions: list[Question]
 
 
+class StepQuizSubmission(BaseModel):
+    step_id: UUID
+    concept_id: str
+    answers: dict[str, int]  # {question_id: option_index}
+
+
+class StepQuizResult(BaseModel):
+    passed: bool
+    score: float
+    message: str
+
+
 # --- Assessment Schemas ---
 
 

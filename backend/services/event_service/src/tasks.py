@@ -1,4 +1,5 @@
 import asyncio
+
 from loguru import logger
 from motor.motor_asyncio import AsyncIOMotorClient
 
@@ -8,6 +9,7 @@ from .config import settings
 # Global client for worker (initialized lazily)
 _mongo_client = None
 
+
 def get_mongo_collection():
     global _mongo_client
     if _mongo_client is None:
@@ -15,6 +17,7 @@ def get_mongo_collection():
         _mongo_client = AsyncIOMotorClient(settings.MONGODB_URL)
     db = _mongo_client[settings.MONGODB_DB_NAME]
     return db["events"]
+
 
 @celery_app.task(name="process_event_ingestion")
 def process_event_ingestion(event_data: dict):
@@ -39,6 +42,7 @@ def process_event_ingestion(event_data: dict):
     if event_data.get("event_type") == "QUIZ_SUBMIT":
         _trigger_ml_processing(event_data)
 
+
 async def _save_to_mongo(data: dict):
     try:
         collection = get_mongo_collection()
@@ -47,6 +51,7 @@ async def _save_to_mongo(data: dict):
     except Exception as e:
         logger.error(f"Failed to save event to Mongo: {e}")
         # Maybe add self.retry() here.
+
 
 def _trigger_ml_processing(event_data: dict):
     context = event_data.get("metadata", {})
@@ -64,5 +69,5 @@ def _trigger_ml_processing(event_data: dict):
         celery_app.send_task(
             "process_student_interaction",
             args=[student_id, concept_id, is_correct],
-            queue="celery"
+            queue="celery",
         )

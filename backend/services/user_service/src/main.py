@@ -1,4 +1,6 @@
+import uuid
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from typing import cast
 
 from fastapi import Depends, FastAPI, HTTPException, status
@@ -337,3 +339,193 @@ def get_student_paths(
         .all()
     )
     return paths
+
+
+@app.patch(
+    "/api/v1/learning-paths/steps/{step_id}/progress",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def update_step_progress(
+    step_id: uuid.UUID,
+    update_data: schemas.StepProgressUpdate,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Heartbeat endpoint. Updates the actual_time spent on a specific step
+    and aggregates it to the parent LearningPath.
+    """
+    # 1. Fetch Step with Path to verify ownership
+    step = (
+        db.query(models.LearningStep)
+        .join(models.LearningPath)
+        .filter(models.LearningStep.id == step_id)
+        .filter(models.LearningPath.student_id == current_user.id)
+        .first()
+    )
+
+    if not step:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Learning step not found or access denied",
+        )
+
+    # 2. Update Step Time
+    current_step_time = step.actual_time or 0
+    step.actual_time = current_step_time + update_data.time_delta
+
+    # 3. Update Status to 'in_progress' if it was pending
+    if step.status == "pending":
+        step.status = "in_progress"
+        step.started_at = datetime.now(UTC)
+
+    # 4. Update Parent Path Time
+    # We load the path relationship
+    path = step.path
+    current_path_time = path.actual_time or 0
+    path.actual_time = current_path_time + update_data.time_delta
+    path.updated_at = datetime.now(UTC)
+
+    db.commit()
+    return None
+
+
+@app.post(
+    "/api/v1/learning-paths/steps/{step_id}/complete",
+    response_model=schemas.StepCompleteResponse,
+)
+def complete_step(
+    step_id: uuid.UUID,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Marks a step as completed. Recalculates the overall path completion percentage.
+    """
+    # 1. Fetch Step and Path
+    step = (
+        db.query(models.LearningStep)
+        .join(models.LearningPath)
+        .filter(models.LearningStep.id == step_id)
+        .filter(models.LearningPath.student_id == current_user.id)
+        .first()
+    )
+
+    if not step:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Learning step not found or access denied",
+        )
+
+    # 2. Update Step Status
+    if step.status != "completed":
+        step.status = "completed"
+        step.completed_at = datetime.now(UTC)
+
+    # 3. Recalculate Path Statistics
+    path = step.path
+
+    # Count total and completed steps
+    # We use db.query to ensure we count all steps, not just loaded ones
+    total_steps = (
+        db.query(func.count(models.LearningStep.id))
+        .filter(models.LearningStep.path_id == path.id)
+        .scalar()
+    ) or 1
+
+    completed_steps = (
+        db.query(func.count(models.LearningStep.id))
+        .filter(models.LearningStep.path_id == path.id)
+        .filter(models.LearningStep.status == "completed")
+        .scalar()
+    ) or 0
+
+    completion_percentage = round(completed_steps / total_steps, 2)
+    path.completion_percentage = completion_percentage
+    path.updated_at = datetime.now(UTC)
+
+    # 4. Check for Path Completion
+    path_is_completed = False
+    if completion_percentage >= 1.0:
+        path.status = "completed"
+        path.completed_at = datetime.now(UTC)
+        path_is_completed = True
+        logger.info(f"User {current_user.id} completed path {path.id}!")
+
+    db.commit()
+
+    return schemas.StepCompleteResponse(
+        step_id=step.id,
+        status="completed",
+        path_completion_percentage=completion_percentage,
+        path_is_completed=path_is_completed,
+    )
+
+
+@app.post(
+    "/api/v1/learning-paths/steps/{step_id}/quiz-result",
+    response_model=schemas.StepCompleteResponse,
+)
+def update_step_quiz_result(
+    step_id: uuid.UUID,
+    result: schemas.StepQuizUpdate,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Updates the step with quiz results.
+    If passed, marks as completed and recalculates path progress.
+    """
+    step = (
+        db.query(models.LearningStep)
+        .join(models.LearningPath)
+        .filter(models.LearningStep.id == step_id)
+        .filter(models.LearningPath.student_id == current_user.id)
+        .first()
+    )
+
+    if not step:
+        raise HTTPException(status_code=404, detail="Step not found")
+
+    # 1. Update Score
+    step.score = result.score
+
+    # 2. Handle Completion (only if passed)
+    if result.passed:
+        if step.status != "completed":
+            step.status = "completed"
+            step.completed_at = datetime.now(UTC)
+
+    # 3. Recalculate Path Stats (Common logic with complete_step)
+    path = step.path
+    total_steps = (
+        db.query(func.count(models.LearningStep.id))
+        .filter(models.LearningStep.path_id == path.id)
+        .scalar()
+    ) or 1
+
+    completed_steps = (
+        db.query(func.count(models.LearningStep.id))
+        .filter(models.LearningStep.path_id == path.id)
+        .filter(models.LearningStep.status == "completed")
+        .scalar()
+    ) or 0
+
+    path.completion_percentage = round(completed_steps / total_steps, 2)
+    path.updated_at = datetime.now(UTC)
+
+    # Check for full path completion
+    path_is_completed = False
+    if path.completion_percentage >= 1.0:
+        path.status = "completed"
+        path.completed_at = datetime.now(UTC)
+        path_is_completed = True
+
+    db.commit()
+
+    return schemas.StepCompleteResponse(
+        step_id=step.id,
+        status=step.status,
+        path_completion_percentage=path.completion_percentage,
+        path_is_completed=path_is_completed,
+    )

@@ -155,10 +155,6 @@ class AssessmentService:
 
         return updates
 
-    # --------------------------------------------------------------------------
-    # MAIN METHOD (AFTER REFACTORING) — complexity < 10 👍
-    # --------------------------------------------------------------------------
-
     async def grade_and_update_ml(
         self, client: httpx.AsyncClient, submission: schemas.AssessmentSubmission
     ) -> dict[str, float]:
@@ -190,6 +186,79 @@ class AssessmentService:
         except Exception as e:
             logger.error(f"Failed to update ML service: {e}")
             raise HTTPException(status_code=503, detail="ML Service unavailable") from e
+
+    async def submit_step_quiz(
+        self,
+        client: httpx.AsyncClient,
+        submission: schemas.StepQuizSubmission,
+        student_id: str,
+        auth_header: str,
+    ) -> schemas.StepQuizResult:
+        """
+        Grades a step quiz, updates ML, and persists to User Service.
+        """
+        # 1. Fetch Truth Data (Correct Answers) from KG
+        # We reuse _fetch_truth_data but for a single concept
+        truth_data = await self._fetch_truth_data(client, [submission.concept_id])
+        question_map = self._build_question_map(truth_data)
+
+        # 2. Calculate Score
+        total_questions = len(question_map)
+        if total_questions == 0:
+            # Fallback if no questions found (shouldn't happen in valid flow)
+            return schemas.StepQuizResult(
+                passed=True, score=1.0, message="No questions to grade."
+            )
+
+        correct_count = 0
+        for q_id, selected_idx in submission.answers.items():
+            if q_id in question_map:
+                if question_map[q_id]["correct_idx"] == selected_idx:
+                    correct_count += 1
+
+        score = round(correct_count / total_questions, 2)
+        passed = score >= 0.6  # 60% threshold
+
+        # 3. Update ML Service (Mastery)
+        # We assume if passed, mastery is high. If failed, it decreases or stays same.
+        # Ideally, ML calculates this based on specific question difficulty.
+        # Here we send a raw update.
+        try:
+            # Construct ML updates
+            ml_updates = self._calculate_mastery_updates(
+                [submission.concept_id], question_map, submission.answers
+            )
+            if ml_updates:
+                await client.post(
+                    f"{config.settings.ML_SERVICE_URL}/api/v1/knowledge/batch-update",
+                    json={"student_id": student_id, "updates": ml_updates},
+                )
+        except Exception as e:
+            logger.error(f"Failed to update ML on quiz submit: {e}")
+            # Non-blocking error
+
+        # 4. Update User Service (Persistence)
+        us_url = f"{config.settings.USER_SERVICE_URL}/api/v1/learning-paths/steps/{submission.step_id}/quiz-result"
+
+        try:
+            resp = await client.post(
+                us_url,
+                json={"score": score, "passed": passed},
+                headers={"Authorization": auth_header},
+            )
+            resp.raise_for_status()
+            # If passed, User Service returns the updated path status info.
+            # We might want to fetch the full path to return to UI or just the status.
+            # Let's assume we might need to refresh the path on client.
+        except Exception as e:
+            logger.error(f"Failed to save quiz result to User Service: {e}")
+            raise HTTPException(status_code=500, detail="Failed to save results") from e
+
+        message = (
+            "Quiz Passed!" if passed else "Quiz Failed. Try reviewing the material."
+        )
+
+        return schemas.StepQuizResult(passed=passed, score=score, message=message)
 
 
 assessment_service = AssessmentService()

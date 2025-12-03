@@ -441,6 +441,39 @@ async def submit_assessment(
     return final_path
 
 
+@app.post(
+    "/api/v1/steps/quiz/submit",
+    response_model=schemas.StepQuizResult,
+)
+async def submit_step_quiz(
+    submission: schemas.StepQuizSubmission,
+    authorization: str | None = Header(None),
+    client: httpx.AsyncClient = Depends(get_http_client),
+):
+    """
+    Submits a quiz for a specific learning step.
+    """
+    if authorization is None:
+        raise HTTPException(status_code=401, detail="Authorization header missing")
+
+    # Extract user_id from token is handled by User Service,
+    # but we need it for ML Service. We can decode JWT or ask User Service /me.
+    # For speed, we ask /me/profile or rely on trusted context.
+    # Let's fetch /me to get ID safely.
+    user_resp = await client.get(
+        f"{config.settings.USER_SERVICE_URL}/api/v1/users/me/profile",
+        headers={"Authorization": authorization},
+    )
+    if user_resp.status_code != 200:
+        raise HTTPException(status_code=401, detail="Invalid User")
+
+    student_id = user_resp.json()["user_id"]
+
+    return await assessment_service.submit_step_quiz(
+        client, submission, student_id, authorization
+    )
+
+
 @app.get("/health")
 def health_check():
     return {"status": "ok", "service": "Learning Path Service"}

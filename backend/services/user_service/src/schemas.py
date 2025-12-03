@@ -101,3 +101,27 @@ class LearningPath(BaseModel):
 
 class TokenRefresh(BaseModel):
     refresh_token: str
+
+
+# --- Progress Tracking Schemas ---
+
+
+class StepProgressUpdate(BaseModel):
+    time_delta: int = Field(
+        ..., ge=0, description="Time spent in seconds since last update"
+    )
+
+
+class StepCompleteResponse(BaseModel):
+    step_id: uuid.UUID
+    status: str
+    path_completion_percentage: float
+    path_is_completed: bool
+
+
+# --- Quiz ---
+
+
+class StepQuizUpdate(BaseModel):
+    score: float = Field(..., ge=0.0, le=1.0, description="Quiz score from 0.0 to 1.0")
+    passed: bool
