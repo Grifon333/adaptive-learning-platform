@@ -72,9 +72,7 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     db_user = db.query(models.User).filter(models.User.email == user.email).first()
     if db_user:
         logger.warning(f"User with email {user.email} already exists")
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail="Email already registered"
-        )
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
     # Hashing the password and creating a new user
     hashed_password = security.get_password_hash(user.password)
     new_user = models.User(
@@ -279,9 +277,7 @@ def create_learning_path(
 
 
 @app.post("api/v1/auth/refresh", response_model=schemas.Token)
-def refresh_access_token(
-    refresh_request: schemas.TokenRefresh, db: Session = Depends(get_db)
-):
+def refresh_access_token(refresh_request: schemas.TokenRefresh, db: Session = Depends(get_db)):
     """
     Update the Access Token, using the Refresh Token
     """
@@ -324,9 +320,7 @@ def get_student_paths(
     current_user: models.User = Depends(get_current_user),
 ):
     if str(current_user.id) != student_id:
-        raise HTTPException(
-            status_code=403, detail="Not authorized to view these paths"
-        )
+        raise HTTPException(status_code=403, detail="Not authorized to view these paths")
     # Filter: return only ACTIVE or COMPLETED.
     # ARCHIVED hide.
     paths = (
@@ -428,9 +422,7 @@ def complete_step(
     # Count total and completed steps
     # We use db.query to ensure we count all steps, not just loaded ones
     total_steps = (
-        db.query(func.count(models.LearningStep.id))
-        .filter(models.LearningStep.path_id == path.id)
-        .scalar()
+        db.query(func.count(models.LearningStep.id)).filter(models.LearningStep.path_id == path.id).scalar()
     ) or 1
 
     completed_steps = (
@@ -499,9 +491,7 @@ def update_step_quiz_result(
     # 3. Recalculate Path Stats (Common logic with complete_step)
     path = step.path
     total_steps = (
-        db.query(func.count(models.LearningStep.id))
-        .filter(models.LearningStep.path_id == path.id)
-        .scalar()
+        db.query(func.count(models.LearningStep.id)).filter(models.LearningStep.path_id == path.id).scalar()
     ) or 1
 
     completed_steps = (
@@ -529,3 +519,95 @@ def update_step_quiz_result(
         path_completion_percentage=path.completion_percentage,
         path_is_completed=path_is_completed,
     )
+
+
+@app.post(
+    "/api/v1/learning-paths/{path_id}/adapt",
+    response_model=schemas.AdaptationResponse,
+    status_code=status.HTTP_200_OK,
+)
+def adapt_learning_path(
+    path_id: uuid.UUID,
+    request: schemas.AdaptationRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    Transactional operation to:
+    1. Shift existing steps down.
+    2. Insert remedial steps.
+    3. Log adaptation history.
+    """
+    logger.info(f"Adapting path {path_id} due to {request.trigger_type}")
+
+    try:
+        # 1. Shift steps
+        # We move all steps >= insert_at_step by the number of new steps
+        shift_amount = len(request.new_steps)
+
+        # Note: We must execute this update carefully to avoid unique constraint violations on (path_id, step_number).
+        # We sort descending to shift the last ones first if doing row-by-row,
+        # but SQL UPDATE handles this set-based operation safely usually.
+        # Ideally, we temporarily disable the constraint or update using a negative logic if needed,
+        # but simpler is:
+
+        db.query(models.LearningStep).filter(
+            models.LearningStep.path_id == path_id,
+            models.LearningStep.step_number >= request.insert_at_step,
+        ).update(
+            {models.LearningStep.step_number: models.LearningStep.step_number + shift_amount},
+            synchronize_session=False,
+        )
+
+        # 2. Insert New Steps
+        new_db_steps = []
+        current_num = request.insert_at_step
+        for step_data in request.new_steps:
+            new_step = models.LearningStep(
+                id=uuid.uuid4(),
+                path_id=path_id,
+                step_number=current_num,
+                concept_id=step_data.concept_id,
+                resources=step_data.resources,
+                estimated_time=step_data.estimated_time,
+                difficulty=step_data.difficulty,
+                status="pending",
+                is_remedial=True,  # Explicitly mark as remedial
+                description=step_data.description,
+            )
+            new_db_steps.append(new_step)
+            current_num += 1
+
+        db.add_all(new_db_steps)
+
+        # 3. Log History
+        adaptation_log = models.Adaptation(
+            path_id=path_id,
+            trigger_type=request.trigger_type,
+            strategy_applied=request.strategy,
+            changes={"inserted_count": shift_amount, "at_step": request.insert_at_step},
+        )
+        db.add(adaptation_log)
+
+        db.commit()
+        return {
+            "success": True,
+            "message": "Path adapted successfully",
+            "path_id": path_id,
+        }
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to adapt path: {e}")
+        raise HTTPException(status_code=500, detail="Adaptation failed") from e
+
+
+@app.get("/api/v1/learning-paths/steps/{step_id}", response_model=schemas.LearningStep)
+def get_learning_step(
+    step_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    step = db.query(models.LearningStep).filter(models.LearningStep.id == step_id).first()
+    if not step:
+        raise HTTPException(status_code=404, detail="Step not found")
+    return step

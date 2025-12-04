@@ -72,6 +72,7 @@ class LearningStep(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
+    path_id: uuid.UUID
     step_number: int
     concept_id: str
     resources: list[dict[str, Any]]
@@ -107,9 +108,7 @@ class TokenRefresh(BaseModel):
 
 
 class StepProgressUpdate(BaseModel):
-    time_delta: int = Field(
-        ..., ge=0, description="Time spent in seconds since last update"
-    )
+    time_delta: int = Field(..., ge=0, description="Time spent in seconds since last update")
 
 
 class StepCompleteResponse(BaseModel):
@@ -125,3 +124,19 @@ class StepCompleteResponse(BaseModel):
 class StepQuizUpdate(BaseModel):
     score: float = Field(..., ge=0.0, le=1.0, description="Quiz score from 0.0 to 1.0")
     passed: bool
+
+
+# --- Adaptation ---
+
+
+class AdaptationRequest(BaseModel):
+    trigger_type: str
+    strategy: str
+    insert_at_step: int
+    new_steps: list[LearningStepCreate]  # The remedial steps to insert
+
+
+class AdaptationResponse(BaseModel):
+    success: bool
+    message: str
+    path_id: uuid.UUID

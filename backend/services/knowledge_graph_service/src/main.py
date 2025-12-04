@@ -41,9 +41,7 @@ app.mount("/static", StaticFiles(directory=UPLOAD_DIR), name="static")
     response_model=schemas.Concept,
     status_code=status.HTTP_201_CREATED,
 )
-async def create_concept(
-    concept: schemas.ConceptCreate, db: AsyncSession = Depends(get_db_session)
-):
+async def create_concept(concept: schemas.ConceptCreate, db: AsyncSession = Depends(get_db_session)):
     """
     Creates a new 'Concept' node in Neo4j.
     """
@@ -84,16 +82,12 @@ async def create_concept(
 
 
 @app.get("/api/v1/concepts/{concept_id}", response_model=schemas.Concept)
-async def get_concept_details(
-    concept_id: str, db: AsyncSession = Depends(get_db_session)
-):
+async def get_concept_details(concept_id: str, db: AsyncSession = Depends(get_db_session)):
     """
     Retrieves concept details by its 'id'
     """
     query = (
-        "MATCH (c:Concept {id: $id}) "
-        "OPTIONAL MATCH (c)-[:HAS_RESOURCE]->(r:Resource) "
-        "RETURN c, collect(r) as resources"
+        "MATCH (c:Concept {id: $id}) OPTIONAL MATCH (c)-[:HAS_RESOURCE]->(r:Resource) RETURN c, collect(r) as resources"
     )
 
     try:
@@ -128,22 +122,12 @@ async def get_concept_details(
     response_model=schemas.Resource,
     status_code=status.HTTP_201_CREATED,
 )
-async def create_resource(
-    resource: schemas.ResourceCreate, db: AsyncSession = Depends(get_db_session)
-):
+async def create_resource(resource: schemas.ResourceCreate, db: AsyncSession = Depends(get_db_session)):
     """
     Creates a new learning resource node.
     """
     res_id = str(uuid.uuid4())
-    query = (
-        "CREATE (r:Resource { "
-        "id: $id, "
-        "title: $title, "
-        "type: $type, "
-        "url: $url, "
-        "duration: $duration "
-        "}) RETURN r"
-    )
+    query = "CREATE (r:Resource { id: $id, title: $title, type: $type, url: $url, duration: $duration }) RETURN r"
 
     try:
         result = await db.run(
@@ -167,17 +151,11 @@ async def create_resource(
 
 
 @app.post("/api/v1/concepts/{concept_id}/resources", status_code=status.HTTP_200_OK)
-async def add_resource_to_concept(
-    concept_id: str, resource_id: str, db: AsyncSession = Depends(get_db_session)
-):
+async def add_resource_to_concept(concept_id: str, resource_id: str, db: AsyncSession = Depends(get_db_session)):
     """
     Links an existing resource to a concept via HAS_RESOURCE relationship.
     """
-    query = (
-        "MATCH (c:Concept {id: $cid}), (r:Resource {id: $rid}) "
-        "MERGE (c)-[:HAS_RESOURCE]->(r) "
-        "RETURN c, r"
-    )
+    query = "MATCH (c:Concept {id: $cid}), (r:Resource {id: $rid}) MERGE (c)-[:HAS_RESOURCE]->(r) RETURN c, r"
     try:
         result = await db.run(query, {"cid": concept_id, "rid": resource_id})
         record = await result.single()
@@ -194,9 +172,7 @@ async def add_resource_to_concept(
 
 
 @app.get("/api/v1/path", response_model=schemas.PathResponse)
-async def get_shortest_path(
-    end_id: str, start_id: str | None = None, db: AsyncSession = Depends(get_db_session)
-):
+async def get_shortest_path(end_id: str, start_id: str | None = None, db: AsyncSession = Depends(get_db_session)):
     """
     Finds path and returns concepts populated with their resources.
     """
@@ -237,9 +213,7 @@ async def get_shortest_path(
 
         if not records:
             if not start_id:
-                logger.info(
-                    f"Main path query empty. Attempting fallback for single concept: {end_id}"
-                )
+                logger.info(f"Main path query empty. Attempting fallback for single concept: {end_id}")
                 # Try to simply return the target itself if it has no dependencies.
                 fallback_query = (
                     "MATCH (c:Concept {id: $end_id}) "
@@ -274,9 +248,7 @@ async def get_shortest_path(
 
 
 @app.post("/api/v1/recommendations", response_model=schemas.RecommendationResponse)
-async def get_recommendations(
-    req: schemas.RecommendationRequest, db: AsyncSession = Depends(get_db_session)
-):
+async def get_recommendations(req: schemas.RecommendationRequest, db: AsyncSession = Depends(get_db_session)):
     """
     Finds concepts that are the next steps for those already studied.
     1. Find all nodes from the known_concept_ids list.
@@ -330,9 +302,7 @@ async def get_recommendations(
 # --- Quiz Endpoints ---
 
 
-@app.post(
-    "/api/v1/concepts/{concept_id}/questions", status_code=status.HTTP_201_CREATED
-)
+@app.post("/api/v1/concepts/{concept_id}/questions", status_code=status.HTTP_201_CREATED)
 async def add_question_to_concept(
     concept_id: str,
     question: schemas.QuestionCreate,
@@ -376,7 +346,7 @@ async def get_concept_quiz(concept_id: str, db: AsyncSession = Depends(get_db_se
     """
     Returns all questions for the concept.
     """
-    query = "MATCH (c:Concept {id: $cid})-[:HAS_QUESTION]->(q:Question) " "RETURN q"
+    query = "MATCH (c:Concept {id: $cid})-[:HAS_QUESTION]->(q:Question) RETURN q"
 
     try:
         result = await db.run(query, {"cid": concept_id})
@@ -396,9 +366,7 @@ async def get_concept_quiz(concept_id: str, db: AsyncSession = Depends(get_db_se
 
 
 @app.post("/api/v1/questions/batch", response_model=schemas.BatchQuestionsResponse)
-async def get_questions_batch(
-    req: schemas.BatchQuestionsRequest, db: AsyncSession = Depends(get_db_session)
-):
+async def get_questions_batch(req: schemas.BatchQuestionsRequest, db: AsyncSession = Depends(get_db_session)):
     """
     Fetches questions for a list of concepts, optionally filtered by difficulty.
     Used by Learning Path Service to construct assessments.
@@ -408,9 +376,7 @@ async def get_questions_batch(
 
     # Dynamic query building
     # We collect questions per concept, limited by the request
-    query = (
-        "MATCH (c:Concept)-[:HAS_QUESTION]->(q:Question) " "WHERE c.id IN $concept_ids "
-    )
+    query = "MATCH (c:Concept)-[:HAS_QUESTION]->(q:Question) WHERE c.id IN $concept_ids "
 
     if req.min_difficulty is not None:
         query += "AND q.difficulty >= $min_diff "
@@ -453,11 +419,7 @@ async def get_questions_batch(
 
                 parsed_questions.append(schemas.Question(**q_dict))
 
-            response_data.append(
-                schemas.ConceptQuestions(
-                    concept_id=concept_id, questions=parsed_questions
-                )
-            )
+            response_data.append(schemas.ConceptQuestions(concept_id=concept_id, questions=parsed_questions))
 
         return schemas.BatchQuestionsResponse(data=response_data)
 
@@ -467,9 +429,7 @@ async def get_questions_batch(
 
 
 @app.get("/api/v1/concepts", response_model=schemas.ConceptListResponse)
-async def get_all_concepts(
-    skip: int = 0, limit: int = 100, db: AsyncSession = Depends(get_db_session)
-):
+async def get_all_concepts(skip: int = 0, limit: int = 100, db: AsyncSession = Depends(get_db_session)):
     """
     Retrieves a paginated list of concepts.
     """
@@ -483,9 +443,7 @@ async def get_all_concepts(
         total = count["total"]
 
     # 2. Fetch Items
-    query = (
-        "MATCH (c:Concept) " "RETURN c " "ORDER BY c.name " "SKIP $skip LIMIT $limit"
-    )
+    query = "MATCH (c:Concept) RETURN c ORDER BY c.name SKIP $skip LIMIT $limit"
     result = await db.run(query, {"skip": skip, "limit": limit})
     records = [record async for record in result]
 
@@ -510,7 +468,7 @@ async def update_concept(
 
     set_clauses = ", ".join([f"c.{key} = ${key}" for key in fields.keys()])
 
-    query = f"MATCH (c:Concept {{id: $id}}) " f"SET {set_clauses} " "RETURN c"
+    query = f"MATCH (c:Concept {{id: $id}}) SET {set_clauses} RETURN c"
 
     params = {"id": concept_id, **fields}
 
@@ -551,9 +509,7 @@ async def delete_concept(concept_id: str, db: AsyncSession = Depends(get_db_sess
 
 
 @app.post("/api/v1/relationships", status_code=status.HTTP_201_CREATED)
-async def create_relationship(
-    rel: schemas.RelationshipCreate, db: AsyncSession = Depends(get_db_session)
-):
+async def create_relationship(rel: schemas.RelationshipCreate, db: AsyncSession = Depends(get_db_session)):
     """
     Creates a relationship between two concepts with Cycle Detection.
     """
@@ -564,8 +520,7 @@ async def create_relationship(
     # If we are adding A -> B, check if a path B -> ... -> A already exists.
     # If it does, adding A -> B closes the loop.
     cycle_check_query = (
-        "MATCH path = (end:Concept {id: $end_id})-[:PREREQUISITE*]->(start:Concept {id: $start_id}) "
-        "RETURN path LIMIT 1"
+        "MATCH path = (end:Concept {id: $end_id})-[:PREREQUISITE*]->(start:Concept {id: $start_id}) RETURN path LIMIT 1"
     )
 
     try:
@@ -596,9 +551,7 @@ async def create_relationship(
         record = await result.single()
 
         if record is None:
-            raise HTTPException(
-                status_code=404, detail="One or both concepts not found"
-            )
+            raise HTTPException(status_code=404, detail="One or both concepts not found")
 
         return {"status": "created", "type": record["rel_type"]}
 
@@ -610,30 +563,21 @@ async def create_relationship(
 
 
 @app.delete("/api/v1/relationships", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_relationship(
-    rel: schemas.RelationshipDelete, db: AsyncSession = Depends(get_db_session)
-):
+async def delete_relationship(rel: schemas.RelationshipDelete, db: AsyncSession = Depends(get_db_session)):
     """
     Removes a specific relationship between two concepts.
     """
-    query = (
-        f"MATCH (a:Concept {{id: $start_id}})-[r:{rel.rel_type}]->(b:Concept {{id: $end_id}}) "
-        "DELETE r"
-    )
+    query = f"MATCH (a:Concept {{id: $start_id}})-[r:{rel.rel_type}]->(b:Concept {{id: $end_id}}) DELETE r"
 
     try:
-        await db.run(
-            query, {"start_id": rel.start_concept_id, "end_id": rel.end_concept_id}
-        )
+        await db.run(query, {"start_id": rel.start_concept_id, "end_id": rel.end_concept_id})
     except Exception as e:
         logger.error(f"Error deleting relationship: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @app.get("/api/v1/resources", response_model=schemas.ResourceListResponse)
-async def get_all_resources(
-    skip: int = 0, limit: int = 100, db: AsyncSession = Depends(get_db_session)
-):
+async def get_all_resources(skip: int = 0, limit: int = 100, db: AsyncSession = Depends(get_db_session)):
     """
     Retrieves a paginated list of all available resources.
     """
@@ -647,9 +591,7 @@ async def get_all_resources(
         total = count["total"]
 
     # 2. Fetch Items
-    query = (
-        "MATCH (r:Resource) " "RETURN r " "ORDER BY r.title " "SKIP $skip LIMIT $limit"
-    )
+    query = "MATCH (r:Resource) RETURN r ORDER BY r.title SKIP $skip LIMIT $limit"
     result = await db.run(query, {"skip": skip, "limit": limit})
     records = [record async for record in result]
 
@@ -673,7 +615,7 @@ async def update_resource(
 
     set_clauses = ", ".join([f"r.{key} = ${key}" for key in fields.keys()])
 
-    query = f"MATCH (r:Resource {{id: $id}}) " f"SET {set_clauses} " "RETURN r"
+    query = f"MATCH (r:Resource {{id: $id}}) SET {set_clauses} RETURN r"
 
     params = {"id": resource_id, **fields}
 
@@ -699,9 +641,7 @@ async def delete_resource(resource_id: str, db: AsyncSession = Depends(get_db_se
 
     try:
         # Check existence
-        check = await db.run(
-            "MATCH (r:Resource {id: $id}) RETURN r", {"id": resource_id}
-        )
+        check = await db.run("MATCH (r:Resource {id: $id}) RETURN r", {"id": resource_id})
         if not await check.single():
             raise HTTPException(status_code=404, detail="Resource not found")
 
@@ -718,29 +658,19 @@ async def delete_resource(resource_id: str, db: AsyncSession = Depends(get_db_se
     "/api/v1/concepts/{concept_id}/resources/{resource_id}",
     status_code=status.HTTP_204_NO_CONTENT,
 )
-async def remove_resource_from_concept(
-    concept_id: str, resource_id: str, db: AsyncSession = Depends(get_db_session)
-):
+async def remove_resource_from_concept(concept_id: str, resource_id: str, db: AsyncSession = Depends(get_db_session)):
     """
     Removes the HAS_RESOURCE relationship between a specific concept and resource.
     Does NOT delete the resource itself.
     """
-    query = (
-        "MATCH (c:Concept {id: $cid})-[rel:HAS_RESOURCE]->(r:Resource {id: $rid}) "
-        "DELETE rel"
-    )
+    query = "MATCH (c:Concept {id: $cid})-[rel:HAS_RESOURCE]->(r:Resource {id: $rid}) DELETE rel"
 
     try:
         # Check relationship existence
-        check_query = (
-            "MATCH (c:Concept {id: $cid})-[rel:HAS_RESOURCE]->(r:Resource {id: $rid}) "
-            "RETURN rel"
-        )
+        check_query = "MATCH (c:Concept {id: $cid})-[rel:HAS_RESOURCE]->(r:Resource {id: $rid}) RETURN rel"
         check = await db.run(check_query, {"cid": concept_id, "rid": resource_id})
         if not await check.single():
-            raise HTTPException(
-                status_code=404, detail="Link between Concept and Resource not found"
-            )
+            raise HTTPException(status_code=404, detail="Link between Concept and Resource not found")
 
         await db.run(query, {"cid": concept_id, "rid": resource_id})
         logger.info(f"Unlinked resource {resource_id} from concept {concept_id}")
@@ -856,15 +786,11 @@ async def get_path_candidates(
                 res_objs = [schemas.Resource(**dict(r)) for r in r_nodes if r]
 
                 # Convert Concept Node to Pydantic Model (attaching resources)
-                concepts_list.append(
-                    schemas.Concept(**dict(c_node), resources=res_objs)
-                )
+                concepts_list.append(schemas.Concept(**dict(c_node), resources=res_objs))
 
             candidates.append(
                 schemas.PathCandidate(
-                    id=str(
-                        uuid.uuid4()
-                    ),  # Generate ephemeral ID for this candidate path
+                    id=str(uuid.uuid4()),  # Generate ephemeral ID for this candidate path
                     concepts=concepts_list,
                     total_difficulty=record["diff"],
                     total_time=record["time"],
@@ -875,6 +801,39 @@ async def get_path_candidates(
 
     except Exception as e:
         logger.error(f"Error finding candidates: {e}")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@app.get(
+    "/api/v1/concepts/{concept_id}/prerequisites",
+    response_model=schemas.ConceptListResponse,
+)
+async def get_concept_prerequisites(concept_id: str, db: AsyncSession = Depends(get_db_session)):
+    """
+    Returns immediate prerequisites for a concept.
+    Used by Adaptation Engine to find remedial content.
+    """
+    query = (
+        "MATCH (c:Concept {id: $id})<-[:PREREQUISITE]-(p:Concept) "
+        "OPTIONAL MATCH (p)-[:HAS_RESOURCE]->(r:Resource) "
+        "RETURN p, collect(r) as resources"
+    )
+
+    try:
+        result = await db.run(query, {"id": concept_id})
+        records = [record async for record in result]
+
+        concepts = []
+        for record in records:
+            c_node = record["p"]
+            r_nodes = record["resources"]
+            resources_list = [schemas.Resource(**dict(r)) for r in r_nodes if r]
+            concepts.append(schemas.Concept(**dict(c_node), resources=resources_list))
+
+        return schemas.ConceptListResponse(total=len(concepts), items=concepts)
+
+    except Exception as e:
+        logger.error(f"Error fetching prerequisites: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 

@@ -163,21 +163,41 @@ class _QuizScreenViewState extends State<_QuizScreenView> {
   void _showResultDialog(BuildContext context, dynamic resultDto) {
     // resultDto is StepQuizResultDto
     final passed = resultDto.passed;
+    final adaptation = resultDto.adaptationOccurred;
     final scorePercent = (resultDto.score * 100).toInt();
+
+    // Determine Dialog Content
+    String title;
+    IconData icon;
+    Color color;
+    String btnText;
+
+    if (passed) {
+      title = 'Congratulations!';
+      icon = Icons.check_circle;
+      color = Colors.green;
+      btnText = 'Continue Path';
+    } else if (adaptation) {
+      title = 'Learning Path Adapted';
+      icon = Icons.alt_route;
+      color = Colors.orange;
+      btnText = 'View New Steps';
+    } else {
+      title = 'Keep Learning';
+      icon = Icons.warning_amber_rounded;
+      color = Colors.redAccent;
+      btnText = 'Review Material';
+    }
 
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
-        title: Text(passed ? 'Congratulations!' : 'Keep Learning'),
+        title: Text(title),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              passed ? Icons.check_circle : Icons.warning_amber_rounded,
-              color: passed ? Colors.green : Colors.orange,
-              size: 64,
-            ),
+            Icon(icon, color: color, size: 64),
             const SizedBox(height: 16),
             Text('Score: $scorePercent%', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
@@ -189,16 +209,19 @@ class _QuizScreenViewState extends State<_QuizScreenView> {
             onPressed: () {
               Navigator.pop(ctx); // Close Dialog
               if (passed) {
-                // Return 'true' to LessonScreen to indicate we should pop the lesson
-                // or simply pop with result
+                // Pass: Pop with true to indicate completion
+                context.pop(true);
+              } else if (adaptation) {
+                // Adaptation: Pop with true (or special signal)
+                // We want to force the LessonScreen to close so the user sees the updated path list.
+                // Sending 'true' satisfies the LessonScreen's condition to context.pop().
                 context.pop(true);
               } else {
-                // If failed, maybe reset the quiz or pop with false?
-                // For now, let's pop(false) so they return to lesson view to review material
+                // Fail (No adaptation): Stay to review or pop false
                 context.pop(false);
               }
             },
-            child: Text(passed ? 'Continue Path' : 'Review Material'),
+            child: Text(btnText),
           ),
         ],
       ),

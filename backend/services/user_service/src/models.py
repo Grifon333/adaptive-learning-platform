@@ -9,6 +9,7 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     String,
+    UniqueConstraint,
     func,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -60,9 +61,7 @@ class StudentProfile(Base):
         unique=True,
         nullable=False,
     )
-    cognitive_profile = Column(
-        JSONB, nullable=True, default=lambda: {"memory": 0.5, "attention": 0.5}
-    )
+    cognitive_profile = Column(JSONB, nullable=True, default=lambda: {"memory": 0.5, "attention": 0.5})
     learning_preferences = Column(
         JSONB,
         nullable=True,
@@ -123,9 +122,7 @@ class LearningStep(Base):
     estimated_time = Column(Integer, nullable=True)
     actual_time = Column(Integer, nullable=True)
     difficulty = Column(Float, nullable=True)
-    status = Column(
-        String(50), default="pending"
-    )  # 'pending', 'in_progress', 'completed'
+    status = Column(String(50), default="pending")  # 'pending', 'in_progress', 'completed'
     score = Column(Float, nullable=True)  # Test/quiz score
     started_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
@@ -139,12 +136,26 @@ class KnowledgeState(Base):
     __tablename__ = "knowledge_states"
 
     id = Column(Integer, primary_key=True, index=True)
-    student_id = Column(
-        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
-    )
+    student_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     concept_id = Column(String(100), nullable=False, index=True)
     mastery_level = Column(Float, default=0.0)  # 0.0 to 1.0
     confidence = Column(Float, default=0.0)
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
     student = relationship("User", back_populates="knowledge_states")
+    __table_args__ = (UniqueConstraint("student_id", "concept_id", name="uq_student_concept"),)
+
+
+class Adaptation(Base):
+    __tablename__ = "adaptations"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    path_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("learning_paths.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    trigger_type = Column(String(50), nullable=False)  # e.g., 'low_performance'
+    strategy_applied = Column(String(100))  # e.g., 'remedial_insertion'
+    changes = Column(JSONB)  # Details of what changed
+    created_at = Column(DateTime, server_default=func.now())

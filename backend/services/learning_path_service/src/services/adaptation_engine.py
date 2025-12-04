@@ -1,8 +1,9 @@
 from typing import Any
 
+import httpx
 from loguru import logger
 
-from .. import schemas
+from .. import config, schemas
 
 
 class AdaptationEngine:
@@ -71,8 +72,7 @@ class AdaptationEngine:
                     status="pending",
                     is_remedial=True,
                     description=f"Review required for '{concept.name}'.",
-                    time_modifier=0.5
-                    * time_modifier,  # Remedial is shorter but affected by attention
+                    time_modifier=0.5 * time_modifier,  # Remedial is shorter but affected by attention
                     difficulty_modifier=0.7,
                     resources=sorted_resources,
                 )
@@ -97,9 +97,7 @@ class AdaptationEngine:
 
         return us_steps, total_time
 
-    def _sort_resources(
-        self, resources: list[schemas.KGSResource], prefs: dict[str, Any]
-    ) -> list[schemas.KGSResource]:
+    def _sort_resources(self, resources: list[schemas.KGSResource], prefs: dict[str, Any]) -> list[schemas.KGSResource]:
         """
         Sorts resources based on VARK scores.
         """
@@ -114,12 +112,7 @@ class AdaptationEngine:
             rtype = res.type.lower()
             if "video" in rtype:
                 return float(prefs.get("visual", 0.0))
-            if (
-                "article" in rtype
-                or "text" in rtype
-                or "book" in rtype
-                or "markdown" in rtype
-            ):
+            if "article" in rtype or "text" in rtype or "book" in rtype or "markdown" in rtype:
                 return float(prefs.get("reading", 0.0))
             if "audio" in rtype:
                 return float(prefs.get("auditory", 0.0))
@@ -219,6 +212,45 @@ class AdaptationEngine:
                 best_candidate = cand
 
         return best_candidate.concepts
+
+    async def create_remediation_plan(
+        self, client: httpx.AsyncClient, concept_id: str, current_step_number: int
+    ) -> tuple[list[schemas.USLearningStepCreate], str]:
+        """
+        Logic:
+        1. Fetch prerequisites for the failed concept from KG.
+        2. Create a 'Review' step for the most relevant prerequisite.
+        """
+        # 1. Fetch Prerequisites
+        try:
+            url = f"{config.settings.KG_SERVICE_URL}/api/v1/concepts/{concept_id}/prerequisites"
+            resp = await client.get(url)
+            resp.raise_for_status()
+            prereqs = resp.json().get("items", [])
+        except Exception as e:
+            logger.error(f"Failed to fetch prereqs: {e}")
+            return [], "Error fetching prerequisites"
+
+        if not prereqs:
+            return [], "No prerequisites found to review."
+
+        # 2. Strategy: Select the one with lowest difficulty (simplest foundation)
+        # In a real DKT system, we would check which specific prereq has low mastery.
+        # For now, we pick the first one as a "Review".
+        target = prereqs[0]
+
+        remedial_step = schemas.USLearningStepCreate(
+            step_number=current_step_number + 1,  # Will be inserted NEXT
+            concept_id=target["id"],
+            resources=[r for r in target["resources"]],  # Convert dicts
+            estimated_time=15,  # Short review
+            difficulty=target["difficulty"] * 0.8,  # Slightly easier
+            status="pending",
+            is_remedial=True,
+            description=f"Remedial: Review '{target['name']}' to improve understanding.",
+        )
+
+        return [remedial_step], "remedial_insertion"
 
 
 adaptation_engine = AdaptationEngine()
