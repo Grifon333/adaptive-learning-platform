@@ -122,6 +122,7 @@ class StepQuizResult(BaseModel):
     passed: bool
     score: float
     message: str
+    adaptation_occurred: bool = False
 
 
 # --- Assessment Schemas ---
