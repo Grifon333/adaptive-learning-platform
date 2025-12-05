@@ -1,4 +1,5 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, status
+from loguru import logger
 
 from . import schemas
 from .database import (
@@ -8,6 +9,7 @@ from .database import (
     update_behavioral_profile,
     update_knowledge_state_batch,
 )
+from .services.rl_engine import rl_engine
 
 app = FastAPI(title="ML Service API")
 
@@ -114,6 +116,44 @@ def get_student_behavior(student_id: str):
     """
     profile = get_behavioral_profile(student_id)
     return {"student_id": student_id, "profile": profile}
+
+
+# --- RL Endpoints ---
+
+
+@app.post("/api/v1/rl/recommend", response_model=schemas.RLRecommendationResponse)
+async def get_rl_recommendation(request: schemas.RLRecommendationRequest):
+    """
+    Returns the optimal next concept based on the RL Policy.
+    """
+    try:
+        concept_id = await rl_engine.get_recommendation(
+            str(request.student_id), request.student_profile, request.valid_concept_ids
+        )
+        return {"recommended_concept_id": concept_id, "exploration_flag": False}
+    except Exception as e:
+        logger.error(f"RL Error: {e}")
+        # Fallback
+        return {
+            "recommended_concept_id": request.valid_concept_ids[0] if request.valid_concept_ids else "",
+            "exploration_flag": False,
+        }
+
+
+@app.post("/api/v1/rl/reward", status_code=status.HTTP_200_OK)
+async def process_rl_reward(request: schemas.RLRewardRequest):
+    """
+    Closes the learning loop.
+    Accepts feedback (mastery gain, engagement change) and updates the agent's memory.
+    """
+    try:
+        await rl_engine.process_feedback(
+            str(request.student_id), request.action_concept_id, request.reward_components, request.prev_state_vector
+        )
+        return {"status": "processed"}
+    except Exception as e:
+        logger.error(f"RL Feedback Error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to process feedback") from e
 
 
 @app.get("/health")

@@ -1,3 +1,4 @@
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel
@@ -51,3 +52,21 @@ class BehavioralProfileUpdate(BaseModel):
 class BehavioralProfileResponse(BaseModel):
     student_id: UUID
     profile: dict[str, float]
+
+
+class RLRecommendationRequest(BaseModel):
+    student_id: UUID
+    valid_concept_ids: list[str]
+    student_profile: dict[str, Any]  # Contains cognitive & prefs
+
+
+class RLRecommendationResponse(BaseModel):
+    recommended_concept_id: str
+    exploration_flag: bool = False
+
+
+class RLRewardRequest(BaseModel):
+    student_id: UUID
+    prev_state_vector: list[float] | None = None  # Optional for stateless update
+    action_concept_id: str
+    reward_components: dict[str, float]  # mastery_delta, behavior_delta, etc.
