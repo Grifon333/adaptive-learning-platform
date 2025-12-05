@@ -8,6 +8,7 @@ class ResourceBase(BaseModel):
     type: str = Field(..., description="video, article, quiz, etc.")
     url: str
     duration: int = Field(default=0, description="Duration in minutes")
+    difficulty: float = Field(default=1.0, ge=1.0, le=10.0, description="Cognitive load/complexity")
 
 
 class ResourceCreate(ResourceBase):
@@ -23,7 +24,8 @@ class ResourceUpdate(BaseModel):
     title: str | None = None
     type: str | None = Field(default=None, description="video, article, quiz, etc.")
     url: str | None = None
-    duration: int | None = Field(default=None, description="Duration in minutes")
+    duration: int | None = None
+    difficulty: float | None = Field(default=None, ge=1.0, le=10.0)
 
 
 class ResourceListResponse(BaseModel):
@@ -38,7 +40,7 @@ class ConceptBase(BaseModel):
     name: str
     description: str | None = None
     difficulty: float = Field(default=1.0, ge=1.0, le=10.0)
-    estimated_time: int = Field(default=30, ge=0)  # in minutes
+    estimated_time: int = Field(default=30, ge=0)
 
 
 class ConceptCreate(ConceptBase):
@@ -69,7 +71,8 @@ class ConceptListResponse(BaseModel):
 class RelationshipCreate(BaseModel):
     start_concept_id: str
     end_concept_id: str
-    rel_type: str = Field(default="PREREQUISITE", alias="type")
+    rel_type: str = Field(default="PREREQUISITE", description="PREREQUISITE or RELATED_TO")
+    weight: float = Field(default=1.0, gt=0.0, le=1.0, description="Strength of dependency or similarity")
 
 
 class RelationshipDelete(BaseModel):
@@ -139,7 +142,7 @@ class BatchQuestionsResponse(BaseModel):
 
 
 class PathCandidate(BaseModel):
-    id: str  # internal ID for debugging
+    id: str
     concepts: list[Concept]
     total_difficulty: float
     total_time: int
