@@ -557,7 +557,8 @@ async def remove_resource_from_concept(concept_id: str, resource_id: str, db: As
 async def upload_file(request: Request, file: UploadFile = File(...)):
     """Uploads a file to the server and returns a direct URL."""
     try:
-        ext = file.filename.rsplit(".", 1)[-1] if "." in file.filename else "bin"
+        filename = file.filename or ""
+        ext = filename.rsplit(".", 1)[-1] if "." in filename else "bin"
         unique_name = f"{uuid.uuid4()}.{ext}"
         path = os.path.join(UPLOAD_DIR, unique_name)
         with open(path, "wb") as buffer:
