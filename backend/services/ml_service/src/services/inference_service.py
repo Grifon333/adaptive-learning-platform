@@ -21,10 +21,12 @@ class InferenceService:
         Loads trained weights if they exist.
         In a real production scenario, this would load from S3 or a Model Registry.
         """
-        model_path = "model_weights.pth"  # Local file for now
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        model_path = os.path.join(base_dir, "data", "dkt_model.pth")
         if os.path.exists(model_path):
             try:
                 self.model.load_state_dict(torch.load(model_path, map_location=self.device))
+                self.model.eval()
                 logger.info(f"Model weights loaded from {model_path}")
             except Exception as e:
                 logger.error(f"Failed to load model weights: {e}")
@@ -88,12 +90,6 @@ class InferenceService:
                 mastery_map[c_id] = float(last_step_prediction[idx].item())
 
         return mastery_map
-
-    # Deprecate the old single-item predict_mastery
-    def predict_mastery(self, concept_id: str, is_correct: bool) -> float:
-        # Legacy support wrapper
-        logger.warning("Using legacy predict_mastery. Prefer predict_next_state.")
-        return 0.5
 
 
 inference_service = InferenceService()

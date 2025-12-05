@@ -144,7 +144,6 @@ def get_behavioral_profile(student_id: str) -> dict:
         return {}
 
 
-# Deprecate
 def update_knowledge_state(student_id: str, concept_id: str, mastery_level: float):
     """
     Thread-safe UPSERT using PostgreSQL ON CONFLICT.
