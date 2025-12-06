@@ -153,11 +153,6 @@ class AssessmentSubmission(BaseModel):
     answers: dict[str, int]  # {question_id: selected_option_index}
 
 
-class AssessmentResult(BaseModel):
-    student_id: UUID
-    mastery_scores: dict[str, float]  # {concept_id: score}
-
-
 # --- User Service Integration Schemas ---
 
 

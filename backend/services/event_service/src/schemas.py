@@ -1,4 +1,3 @@
-import uuid
 from datetime import UTC, datetime
 from typing import Any
 
@@ -10,10 +9,6 @@ class EventCreate(BaseModel):
     student_id: str
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     metadata: dict[str, Any] = Field(default_factory=dict, description="Arbitrary event data")
-
-
-class Event(EventCreate):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
 
 
 class EventBatchCreate(BaseModel):

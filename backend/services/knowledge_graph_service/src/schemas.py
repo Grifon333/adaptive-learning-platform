@@ -81,11 +81,6 @@ class RelationshipDelete(BaseModel):
     rel_type: str = "PREREQUISITE"
 
 
-class ResourceLink(BaseModel):
-    concept_id: str
-    resource_id: str
-
-
 class PathResponse(BaseModel):
     path: list[Concept]
 
