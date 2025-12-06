@@ -144,6 +144,7 @@ services:
       - MONGODB_URL=mongodb://mongodb:27017
       - MONGODB_DB_NAME=${MONGODB_DB_NAME}
       - REDIS_URL=redis://redis:6379/0
+      - ANALYTICS_SERVICE_URL=http://analytics_service:8000
       - LOG_LEVEL=INFO
     depends_on:
       - mongodb
@@ -196,6 +197,7 @@ services:
       - MONGODB_URL=mongodb://mongodb:27017
       - MONGODB_DB_NAME=${MONGODB_DB_NAME}
       - REDIS_URL=redis://redis:6379/0
+      - ANALYTICS_SERVICE_URL=http://analytics_service:8000
       - LOG_LEVEL=INFO
     depends_on:
       - redis
@@ -214,6 +216,7 @@ services:
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       - MONGODB_URL=mongodb://mongodb:27017
       - MONGODB_DB_NAME=${MONGODB_DB_NAME}
+      - ML_SERVICE_URL=http://ml_service:8000
       - LOG_LEVEL=INFO
     depends_on:
       postgres:

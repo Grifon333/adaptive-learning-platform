@@ -1,10 +1,12 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+
 class Settings(BaseSettings):
     MONGODB_URL: str
     MONGODB_DB_NAME: str = "adaptive_learning_events"
     LOG_LEVEL: str = "INFO"
     REDIS_URL: str
+    ANALYTICS_SERVICE_URL: str
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -12,4 +14,5 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-settings = Settings() # type: ignore[call-arg]
+
+settings = Settings()  # type: ignore[call-arg]
