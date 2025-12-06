@@ -56,7 +56,7 @@ async def calculate_and_push_behavior(student_id: str, db: Session = Depends(get
             resp.raise_for_status()
         except Exception as e:
             logger.error(f"Failed to sync with ML Service: {e}")
-            raise HTTPException(status_code=500, detail="Sync failed")
+            raise HTTPException(status_code=500, detail="Sync failed") from e
 
     return {"status": "updated", "data": behavior_data}
 
