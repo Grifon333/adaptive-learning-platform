@@ -22,7 +22,7 @@ class InferenceService:
         In a real production scenario, this would load from S3 or a Model Registry.
         """
         base_dir = os.path.dirname(os.path.abspath(__file__))
-        model_path = os.path.join(base_dir, "data", "dkt_model.pth")
+        model_path = os.path.join(base_dir, "..", "models", "data", "dkt_model.pth")
         if os.path.exists(model_path):
             try:
                 self.model.load_state_dict(torch.load(model_path, map_location=self.device))
@@ -54,7 +54,7 @@ class InferenceService:
 
         # 3. Vectorize
         input_seq = []
-        input_dim = settings.INPUT_DIM
+        input_dim = settings.INPUT_DIM_DKT
 
         for item in history:
             c_idx = get_concept_index(item["concept_id"])
