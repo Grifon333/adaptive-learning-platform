@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import cast
 
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, status
 from loguru import logger
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -65,35 +65,127 @@ def get_current_user(
     return cast(models.User, user)
 
 
+def send_verification_email(email: str, token: str):
+    # In production, use e.g., FastMail, AWS SES, or SendGrid here
+    logger.info(f"[Background Task] Sending verification email to {email}. Link: /verify?token={token}")
+
+
 @app.post("/api/v1/auth/register", status_code=status.HTTP_201_CREATED)
-def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
-    logger.info(f"Registering user: {user.email}")
-    # Checking if a user with this email already exists
-    db_user = db.query(models.User).filter(models.User.email == user.email).first()
-    if db_user:
-        logger.warning(f"User with email {user.email} already exists")
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
-    # Hashing the password and creating a new user
-    hashed_password = security.get_password_hash(user.password)
+def register_user(user: schemas.UserCreate, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    # 1. Check existing
+    if db.query(models.User).filter(models.User.email == user.email).first():
+        raise HTTPException(status_code=409, detail="Email already registered")
+
+    # 2. Create User
     new_user = models.User(
         email=user.email,
-        password_hash=hashed_password,
+        password_hash=security.get_password_hash(user.password),
         first_name=user.first_name,
         last_name=user.last_name,
         role=models.UserRole.student,
+        is_verified=False,
     )
 
-    if new_user.role == models.UserRole.student:
-        new_profile = models.StudentProfile(user=new_user)
-        db.add(new_profile)
-
+    # 3. Create Profile
     db.add(new_user)
+    db.flush()  # Generate ID
+
+    new_profile = models.StudentProfile(user_id=new_user.id)
+    db.add(new_profile)
     db.commit()
     db.refresh(new_user)
 
-    # TODO: Add email verification logic
-    logger.success(f"User {new_user.email} registered successfully (ID: {new_user.id})")
-    return {"message": "User registered successfully. Please verify your email."}
+    # 4. Trigger Email Verification
+    verification_token = security.create_verification_token(new_user.email)
+    background_tasks.add_task(send_verification_email, new_user.email, verification_token)
+
+    return {"message": "User registered. Please check your email to verify account."}
+
+
+@app.post("/api/v1/auth/verify-email")
+def verify_email(req: schemas.EmailVerificationRequest, db: Session = Depends(get_db)):
+    email = security.decode_token(req.token, "verification")
+    if not email:
+        raise HTTPException(status_code=400, detail="Invalid or expired token")
+
+    user = db.query(models.User).filter(models.User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if user.is_verified:
+        return {"message": "Email already verified"}
+
+    user.is_verified = True
+    db.commit()
+    return {"message": "Email verified successfully"}
+
+
+@app.post("/api/v1/auth/social-login", response_model=schemas.Token)
+def social_login(login_data: schemas.UserSocialLogin, db: Session = Depends(get_db)):
+    """
+    Handles login/registration from Social Providers.
+    Assumes Frontend has already verified validity with Provider and sends clean data.
+    """
+    user = db.query(models.User).filter(models.User.email == login_data.email).first()
+
+    if not user:
+        # Register on the fly
+        user = models.User(
+            email=login_data.email,
+            first_name=login_data.first_name,
+            last_name=login_data.last_name,
+            provider=login_data.provider,
+            provider_id=login_data.provider_id,
+            is_verified=True,  # Social accounts are implicitly verified
+            role=models.UserRole.student,
+            avatar_url=login_data.avatar_url,
+        )
+        db.add(user)
+        db.flush()
+        db.add(models.StudentProfile(user_id=user.id))
+        db.commit()
+        db.refresh(user)
+        logger.info(f"New Social User Registered: {user.email}")
+    else:
+        # Link provider if not linked (Optional logic)
+        if not user.provider:
+            user.provider = login_data.provider
+            user.provider_id = login_data.provider_id
+            db.commit()
+
+    # Generate Session
+    subject = {"sub": str(user.id)}
+    return {
+        "access_token": security.create_access_token(subject),
+        "refresh_token": security.create_refresh_token(subject),
+        "token_type": "bearer",
+    }
+
+
+@app.post("/api/v1/auth/forgot-password")
+def forgot_password(req: schemas.PasswordResetRequest, db: Session = Depends(get_db)):
+    user = db.query(models.User).filter(models.User.email == req.email).first()
+    if user:
+        # Security: Don't reveal if user exists or not, but log internally
+        token = security.create_password_reset_token(user.email)
+        logger.info(f"[EVENT: email_send] Password Reset for {user.email}: {token}")
+
+    return {"message": "If the email exists, a reset link has been sent."}
+
+
+@app.post("/api/v1/auth/reset-password")
+def reset_password(req: schemas.PasswordResetConfirm, db: Session = Depends(get_db)):
+    email = security.decode_token(req.token, "reset")
+    if not email:
+        raise HTTPException(status_code=400, detail="Invalid or expired token")
+
+    user = db.query(models.User).filter(models.User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    user.password_hash = security.get_password_hash(req.new_password)
+    db.commit()
+    return {"message": "Password updated successfully"}
 
 
 @app.post("/api/v1/auth/login", response_model=schemas.Token)
@@ -151,42 +243,121 @@ def login_for_access_token(
     }
 
 
-@app.get("/api/v1/users/me/profile", response_model=schemas.StudentProfile)
-def get_user_profile(current_user: models.User = Depends(get_current_user)):
+@app.get("/api/v1/users/me/profile", response_model=schemas.FullUserProfile)
+def get_user_profile(current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
     """
-    Receives the profile of the currently logged-in student
+    Returns the unified profile (Identity + Learning Data).
     """
-    if current_user.role != models.UserRole.student or current_user.profile is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Student profile not found",
+    if current_user.profile is None:
+        logger.warning(f"Profile missing for user {current_user.id}. Auto-healing...")
+
+        # 1. Create new profile instance (Initializes S_0^u components with defaults)
+        new_profile = models.StudentProfile(user_id=current_user.id)
+
+        # 2. Persist to DB
+        try:
+            db.add(new_profile)
+            db.commit()
+            # 3. Refresh the user to load the relationship 'profile'
+            db.refresh(current_user)
+        except Exception as e:
+            logger.error(f"Failed to auto-heal profile: {e}")
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to initialize user profile"
+            ) from e
+
+    # At this point, current_user.profile is guaranteed to exist
+    profile = current_user.profile
+
+    if profile is None:
+        return schemas.FullUserProfile(
+            id=current_user.id,
+            email=cast(str, current_user.email),
+            first_name=cast(str, current_user.first_name),
+            last_name=cast(str, current_user.last_name),
+            avatar_url=current_user.avatar_url,
+            role=str(current_user.role),
+            cognitive_profile={},
+            learning_preferences={},
+            learning_goals=[],
+            study_schedule={},
+            timezone=None,
+            privacy_settings={},
         )
-    return current_user.profile
+
+    # Manual mapping to flatten the structure for the schema
+    return schemas.FullUserProfile(
+        # Identity
+        id=current_user.id,
+        email=cast(str, current_user.email),
+        first_name=cast(str, current_user.first_name),
+        last_name=cast(str, current_user.last_name),
+        avatar_url=current_user.avatar_url,
+        role=str(current_user.role),
+        # Profile Data (psi_u)
+        cognitive_profile=profile.cognitive_profile or {},
+        learning_preferences=profile.learning_preferences or {},
+        learning_goals=profile.learning_goals or [],
+        study_schedule=profile.study_schedule or {},
+        timezone=profile.timezone,
+        privacy_settings=profile.privacy_settings or {},
+    )
 
 
-@app.put("/api/v1/users/me/profile", response_model=schemas.StudentProfile)
+@app.put("/api/v1/users/me/profile", response_model=schemas.FullUserProfile)
 def update_user_profile(
-    profile_data: schemas.StudentProfileUpdate,
+    profile_data: schemas.UserProfileUpdate,
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """
-    Updates the profile of the currently logged-in student
+    Updates user identity and learning profile.
     """
     profile = current_user.profile
     if profile is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Student profile not found",
-        )
+        raise HTTPException(status_code=404, detail="Student profile not found")
 
-    update_data = profile_data.model_dump(exclude_unset=True)
-    for key, value in update_data.items():
-        setattr(profile, key, value)
+    # 1. Update Identity Fields (User Table)
+    if profile_data.first_name:
+        current_user.first_name = profile_data.first_name
+    if profile_data.last_name:
+        current_user.last_name = profile_data.last_name
+    if profile_data.avatar_url:
+        current_user.avatar_url = profile_data.avatar_url
+
+    # 2. Update Profile Fields (StudentProfile Table)
+    if profile_data.learning_preferences is not None:
+        profile.learning_preferences = profile_data.learning_preferences
+    if profile_data.learning_goals is not None:
+        profile.learning_goals = profile_data.learning_goals
+    if profile_data.study_schedule is not None:
+        profile.study_schedule = profile_data.study_schedule
+    if profile_data.timezone is not None:
+        profile.timezone = profile_data.timezone
+    if profile_data.privacy_settings is not None:
+        profile.privacy_settings = profile_data.privacy_settings
+
+    db.add(current_user)
     db.add(profile)
     db.commit()
-    db.refresh(profile)
-    return profile
+    db.refresh(current_user)
+
+    # Return updated structure
+    return schemas.FullUserProfile(
+        id=current_user.id,
+        email=cast(str, current_user.email),
+        first_name=cast(str, current_user.first_name),
+        last_name=cast(str, current_user.last_name),
+        avatar_url=current_user.avatar_url,
+        role=str(current_user.role),
+        cognitive_profile=current_user.profile.cognitive_profile or {},
+        learning_preferences=current_user.profile.learning_preferences or {},
+        learning_goals=current_user.profile.learning_goals or [],
+        study_schedule=current_user.profile.study_schedule or {},
+        timezone=current_user.profile.timezone,
+        privacy_settings=current_user.profile.privacy_settings or {},
+    )
 
 
 @app.post(
@@ -282,6 +453,13 @@ def refresh_access_token(refresh_request: schemas.TokenRefresh, db: Session = De
     Update the Access Token, using the Refresh Token
     """
     token_data = security.decode_access_token(refresh_request.refresh_token)
+    if token_data is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid refresh token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     if token_data.token_type != "refresh":
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

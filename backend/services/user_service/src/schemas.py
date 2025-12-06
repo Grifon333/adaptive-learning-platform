@@ -27,28 +27,60 @@ class TokenData(BaseModel):
     token_type: str = "access"
 
 
-class StudentProfile(BaseModel):
+class FullUserProfile(BaseModel):
+    # Identity (from User)
+    id: uuid.UUID
+    email: EmailStr
+    first_name: str
+    last_name: str
+    avatar_url: str | None = None
+    role: str
+
+    # Profile Data (from StudentProfile)
+    cognitive_profile: dict[str, Any] = {}
+    learning_preferences: dict[str, Any] = {}
+    learning_goals: list[str] = []
+    study_schedule: dict[str, Any] = {}
+    timezone: str | None = None
+    privacy_settings: dict[str, Any] = {}
+
     model_config = ConfigDict(from_attributes=True)
 
-    id: uuid.UUID
-    user_id: uuid.UUID
-    cognitive_profile: dict[str, Any]
-    learning_preferences: dict[str, Any]
-    timezone: str | None = None
 
+class UserProfileUpdate(BaseModel):
+    # Identity Updates
+    first_name: str | None = None
+    last_name: str | None = None
+    avatar_url: str | None = None
 
-class StudentProfileUpdate(BaseModel):
-    cognitive_profile: dict[str, Any] | None = None
+    # Profile Updates
     learning_preferences: dict[str, Any] | None = None
+    learning_goals: list[str] | None = None
+    study_schedule: dict[str, Any] | None = None
     timezone: str | None = None
+    privacy_settings: dict[str, Any] | None = None
 
 
-class ResourceData(BaseModel):
-    id: str
-    title: str
-    type: str
-    url: str
-    duration: int
+class UserSocialLogin(BaseModel):
+    email: EmailStr
+    provider: str = Field(..., description="google or microsoft")
+    provider_id: str
+    first_name: str
+    last_name: str
+    avatar_url: str | None = None
+
+
+class EmailVerificationRequest(BaseModel):
+    token: str
+
+
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+
+
+class PasswordResetConfirm(BaseModel):
+    token: str
+    new_password: str = Field(min_length=8)
 
 
 class LearningStepCreate(BaseModel):

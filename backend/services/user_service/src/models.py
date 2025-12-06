@@ -1,17 +1,6 @@
 import uuid
 
-from sqlalchemy import (
-    Boolean,
-    Column,
-    DateTime,
-    Enum,
-    Float,
-    ForeignKey,
-    Integer,
-    String,
-    UniqueConstraint,
-    func,
-)
+from sqlalchemy import Boolean, Column, DateTime, Enum, Float, ForeignKey, Integer, String, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 
@@ -29,23 +18,26 @@ class User(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     email = Column(String(255), unique=True, index=True, nullable=False)
-    password_hash = Column(String(255), nullable=False)
+    password_hash = Column(String(255), nullable=True)
+
     first_name = Column(String(100), nullable=False)
     last_name = Column(String(100), nullable=False)
     role = Column(String(50), nullable=False, default=UserRole.student)
+
+    # Auth State
     is_active = Column(Boolean, default=True)
     is_verified = Column(Boolean, default=False)
+
+    # Social Auth Fields
+    provider = Column(String(50), nullable=True)  # 'google', 'microsoft'
+    provider_id = Column(String(255), nullable=True)  # Unique ID from provider
+
     avatar_url = Column(String(500), nullable=True)
     last_login = Column(DateTime, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
-    profile = relationship(
-        "StudentProfile",
-        back_populates="user",
-        uselist=False,
-        cascade="all, delete-orphan",
-    )
+    profile = relationship("StudentProfile", back_populates="user", uselist=False, cascade="all, delete-orphan")
 
     learning_paths = relationship("LearningPath", back_populates="student")
     knowledge_states = relationship("KnowledgeState", back_populates="student")
@@ -55,25 +47,19 @@ class StudentProfile(Base):
     __tablename__ = "student_profiles"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id = Column(
-        UUID(as_uuid=True),
-        ForeignKey("users.id", ondelete="CASCADE"),
-        unique=True,
-        nullable=False,
-    )
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False)
+    # The cognitive profile (psi_u) - read-only for user, updated by ML/Tests
     cognitive_profile = Column(JSONB, nullable=True, default=lambda: {"memory": 0.5, "attention": 0.5})
     learning_preferences = Column(
         JSONB,
         nullable=True,
-        default=lambda: {
-            "visual": 0.25,
-            "auditory": 0.25,
-            "kinesthetic": 0.25,
-            "reading": 0.25,
-        },
+        default=lambda: {"visual": 0.25, "auditory": 0.25, "kinesthetic": 0.25, "reading": 0.25, "pace": "medium"},
     )
+
+    learning_goals = Column(JSONB, nullable=True, default=lambda: [])  # e.g. ["Learn Python", "Master Calculus"]
+    privacy_settings = Column(JSONB, nullable=True, default=lambda: {"show_progress": True, "public_profile": False})
     timezone = Column(String(50), nullable=True, default="UTC")
-    study_schedule = Column(JSONB, nullable=True, default=lambda: {})
+    study_schedule = Column(JSONB, nullable=True, default=lambda: {})  # e.g. {"Mon": ["18:00-20:00"]}
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
@@ -84,11 +70,7 @@ class LearningPath(Base):
     __tablename__ = "learning_paths"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    student_id = Column(
-        UUID(as_uuid=True),
-        ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=False,
-    )
+    student_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     goal_concepts = Column(JSONB, nullable=False)
     status = Column(String(50), default="active")  # 'active', 'completed', 'abandoned'
     estimated_time = Column(Integer, nullable=True)  # Total time, min
@@ -111,11 +93,7 @@ class LearningStep(Base):
     __tablename__ = "learning_steps"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    path_id = Column(
-        UUID(as_uuid=True),
-        ForeignKey("learning_paths.id", ondelete="CASCADE"),
-        nullable=False,
-    )
+    path_id = Column(UUID(as_uuid=True), ForeignKey("learning_paths.id", ondelete="CASCADE"), nullable=False)
     step_number = Column(Integer, nullable=False)
     concept_id = Column(String(100), nullable=False)
     resources = Column(JSONB, nullable=False, default=[])
@@ -150,11 +128,7 @@ class Adaptation(Base):
     __tablename__ = "adaptations"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    path_id = Column(
-        UUID(as_uuid=True),
-        ForeignKey("learning_paths.id", ondelete="CASCADE"),
-        nullable=False,
-    )
+    path_id = Column(UUID(as_uuid=True), ForeignKey("learning_paths.id", ondelete="CASCADE"), nullable=False)
     trigger_type = Column(String(50), nullable=False)  # e.g., 'low_performance'
     strategy_applied = Column(String(100))  # e.g., 'remedial_insertion'
     changes = Column(JSONB)  # Details of what changed
