@@ -7,12 +7,8 @@ from ..database import get_all_student_knowledge, get_behavioral_profile
 from ..models.rl import RLAgent
 from ..utils import CONCEPT_TO_INDEX, get_concept_index
 
-# Global Agent Instance
-# Input: 100 (Concepts) + 5 (Behavior) + 6 (Cognitive) = 111
-# Output: 100 (Concepts)
-# TODO: Get exact counts dynamically. For now, using hardcoded sizing from Seed/Config.
-INPUT_DIM = settings.INPUT_DIM + 5 + 6
-OUTPUT_DIM = settings.OUTPUT_DIM
+INPUT_DIM = settings.INPUT_DIM_RL + 11
+OUTPUT_DIM = settings.OUTPUT_DIM_RL
 
 rl_agent = RLAgent(INPUT_DIM, OUTPUT_DIM)
 
@@ -145,10 +141,10 @@ class RLEngine:
         Order: [Knowledge... | Behavior... | Cognitive... | Prefs...]
         """
         # 1. Knowledge (Sorted by Index)
-        k_vec = [0.0] * settings.INPUT_DIM
+        k_vec = [0.0] * settings.INPUT_DIM_RL
         for cid, mastery in k_map.items():
             idx = get_concept_index(cid)
-            if 0 <= idx < settings.INPUT_DIM:
+            if 0 <= idx < settings.INPUT_DIM_RL:
                 k_vec[idx] = mastery
 
         # 2. Behavior (Fixed order: procrastination, gaming, engagement, hint, error)

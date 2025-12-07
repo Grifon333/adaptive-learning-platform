@@ -39,9 +39,6 @@ async def _get_student_profile(
     """
     Fetches student profile from User Service.
     """
-    url = f"{config.settings.USER_SERVICE_URL}/api/v1/users/{student_id}/profile"  # Assuming admin/internal endpoint
-    # OR reuse /me/profile if we proxy the user's token.
-    # Since the request comes FROM the user, we can use /me/profile with their token.
     url = f"{config.settings.USER_SERVICE_URL}/api/v1/users/me/profile"
 
     try:
@@ -128,197 +125,6 @@ async def _fetch_kg_candidates(
     return schemas.KGSMultiPathResponse(**resp.json()).candidates
 
 
-@app.post(
-    "/api/v1/students/{student_id}/learning-paths",
-    response_model=schemas.LearningPathResponse,
-    status_code=status.HTTP_201_CREATED,
-)
-async def create_learning_path(
-    student_id: uuid.UUID,
-    request: schemas.LearningPathCreateRequest,
-    authorization: str | None = Header(None),
-    client: httpx.AsyncClient = Depends(get_http_client),
-):
-    logger.info(f"Received path request for student {student_id}...")
-    str_student_id = str(student_id)
-
-    if authorization is None:
-        raise HTTPException(status_code=401, detail="Authorization header missing")
-
-    # 1. Get Raw Path Candidates from KGS
-    try:
-        candidates = await _fetch_kg_candidates(client, request.goal_concept_id, request.start_concept_id)
-    except Exception as e:
-        logger.error(f"KGS candidates fetch failed: {e}")
-        raise HTTPException(status_code=404, detail="No path found") from e
-
-    if not candidates:
-        raise HTTPException(status_code=404, detail="No viable path found")
-
-    # 2. Fetch Profile (for RL)
-    profile = await _get_student_profile(client, str_student_id, authorization)
-
-    # 3. SELECT BEST PATH via RL
-    # We ask RL agent to pick the best candidate based on the full profile
-    best_path_concepts = await adaptation_engine.select_optimal_path(client, str_student_id, candidates, profile)
-
-    # 4. Batch Fetch Mastery (for adaptation)
-    unique_ids = list(set([c.id for c in best_path_concepts]))
-    mastery_map = await _get_mastery_batch(client, str_student_id, unique_ids)
-
-    # 5. Linearize and Adapt
-    us_steps, total_time = adaptation_engine.generate_adaptive_steps(best_path_concepts, mastery_map, profile)
-
-    # 6. Save to User Service
-    us_path_data = schemas.USLearningPathCreate(
-        goal_concepts=[request.goal_concept_id],
-        steps=us_steps,
-        estimated_time=total_time,
-    )
-
-    us_url = f"{config.settings.USER_SERVICE_URL}/api/v1/learning-paths"
-    try:
-        us_response = await client.post(
-            us_url,
-            json=us_path_data.model_dump(),
-            headers={"Authorization": authorization},
-        )
-        us_response.raise_for_status()
-        return us_response.json()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail="Failed to save path") from e
-
-
-@app.get(
-    "/api/v1/students/{student_id}/learning-paths",
-    response_model=list[schemas.LearningPathResponse],
-)
-async def get_student_learning_paths(
-    student_id: str,
-    authorization: str | None = Header(None),
-    client: httpx.AsyncClient = Depends(get_http_client),
-):
-    """
-    Retrieves all learning paths for a specific student from User Service.
-    """
-    us_url = f"{config.settings.USER_SERVICE_URL}/api/v1/students/{student_id}/learning-paths"
-
-    try:
-        logger.info(f"Fetching paths from User Service: {us_url}")
-        us_response = await client.get(us_url, headers={"Authorization": authorization} if authorization else {})
-        us_response.raise_for_status()
-        return us_response.json()
-    except httpx.HTTPStatusError as e:
-        logger.error(f"User Service error: {e.response.text}")
-        if e.response.status_code == 404:
-            return []
-        raise HTTPException(status_code=e.response.status_code, detail="Failed to fetch paths") from e
-    except Exception as e:
-        logger.error(f"Connection error: {e}")
-        raise HTTPException(status_code=500, detail="User Service unavailable") from e
-
-
-@app.get(
-    "/api/v1/students/{student_id}/recommendations",
-    response_model=schemas.RecommendationResponse,
-)
-async def get_student_recommendations(
-    student_id: str,
-    authorization: str | None = Header(None),
-    client: httpx.AsyncClient = Depends(get_http_client),
-):
-    """
-    Recommendation orchestrator using RL:
-    1. Get Student Profile.
-    2. Get Mastery Map.
-    3. Filter 'known' concepts.
-    4. Ask KGS for candidates (next possible steps).
-    5. Ask RL Agent to select the single best concept from candidates.
-    6. Return it.
-    """
-    logger.info(f"Generating recommendations for student {student_id}")
-
-    # 1. Fetch Profile
-    profile = await _get_student_profile(client, student_id, authorization or "")
-
-    # 2. Receive Mastery Map
-    try:
-        ml_url = f"{config.settings.ML_SERVICE_URL}/api/v1/students/{student_id}/mastery"
-        ml_response = await client.get(ml_url)
-        ml_response.raise_for_status()
-        mastery_map = ml_response.json().get("mastery_map", {})
-    except Exception:
-        mastery_map = {}
-
-    # 3. Identify Known Concepts (Mastery > 0.7)
-    known_ids = [cid for cid, score in mastery_map.items() if score > 0.7]
-
-    # 4. Ask KGS for Candidates
-    # KGS returns a list of concepts that logically follow the known ones
-    try:
-        kg_url = f"{config.settings.KG_SERVICE_URL}/api/v1/recommendations"
-        # We ask for a few candidates (limit=5) to give the RL agent some choices
-        kg_response = await client.post(kg_url, json={"known_concept_ids": known_ids, "limit": 5})
-        kg_response.raise_for_status()
-        concepts_data = kg_response.json().get("recommendations", [])
-        # Convert to objects
-        candidates = [schemas.KGSConcept(**c) for c in concepts_data]
-    except Exception as e:
-        logger.error(f"Failed to fetch recommendations from KG: {e}")
-        raise HTTPException(status_code=500, detail="Recommendation generation failed") from e
-
-    if not candidates:
-        return schemas.RecommendationResponse(recommendations=[])
-
-    # 5. RL Selection
-    # We ask the RL engine to pick the BEST one from the 5 candidates
-    best_concept = await adaptation_engine.select_optimal_path_concept(client, student_id, candidates, profile)
-
-    # If RL fails or returns nothing, fallback to first
-    if not best_concept:
-        best_concept = candidates[0]
-
-    # 6. Format Response
-    # We return the Best concept first, followed by others (optional, here we return list)
-    # Re-ordering list to put best first
-    final_list = [best_concept] + [c for c in candidates if c.id != best_concept.id]
-
-    formatted_recs = []
-    for i, concept in enumerate(final_list):
-        formatted_recs.append(
-            schemas.LearningStep(
-                id=uuid.uuid4(),
-                step_number=i + 1,
-                concept_id=concept.id,
-                resources=[r.model_dump() for r in concept.resources],
-                status="pending",
-                estimated_time=concept.estimated_time,
-                difficulty=concept.difficulty,
-                description=concept.description,
-            )
-        )
-
-    return schemas.RecommendationResponse(recommendations=formatted_recs)
-
-
-@app.get("/api/v1/quizzes/{concept_id}", response_model=schemas.QuizResponse)
-async def get_quiz_for_concept(
-    concept_id: str,
-    client: httpx.AsyncClient = Depends(get_http_client),
-):
-    """
-    Receives a test for the concept from the Knowledge Graph Service.
-    """
-    try:
-        kg_url = f"{config.settings.KG_SERVICE_URL}/api/v1/concepts/{concept_id}/quiz"
-        response = await client.get(kg_url)
-        response.raise_for_status()
-        return response.json()
-    except Exception as e:
-        logger.error(f"Failed to fetch quiz: {e}")
-        return {"questions": []}
-
-
 async def _get_mastery_batch(client: httpx.AsyncClient, student_id: str, concept_ids: list[str]) -> dict[str, float]:
     if not concept_ids:
         return {}
@@ -330,95 +136,6 @@ async def _get_mastery_batch(client: httpx.AsyncClient, student_id: str, concept
         return cast(dict[str, float], data)
     except Exception:
         return {cid: 0.0 for cid in concept_ids}
-
-
-@app.post(
-    "/api/v1/assessments/start",
-    response_model=schemas.AssessmentSession,
-    status_code=status.HTTP_200_OK,
-)
-async def start_initial_assessment(
-    request: schemas.AssessmentStartRequest,
-    client: httpx.AsyncClient = Depends(get_http_client),
-):
-    """
-    Generates an initial test session for the requested Goal.
-    """
-    logger.info(f"Generating assessment for student {request.student_id}")
-    try:
-        session = await assessment_service.generate_assessment(client, request.goal_concept_id, str(request.student_id))
-        return session
-    except Exception as e:
-        logger.error(f"Error starting assessment: {e}")
-        raise HTTPException(status_code=500, detail="Failed to generate assessment") from e
-
-
-@app.post(
-    "/api/v1/assessments/submit",
-    response_model=schemas.LearningPathResponse,
-    status_code=status.HTTP_201_CREATED,
-)
-async def submit_assessment(
-    submission: schemas.AssessmentSubmission,
-    authorization: str | None = Header(None),
-    client: httpx.AsyncClient = Depends(get_http_client),
-):
-    """
-    1. Grades the assessment against KGS data.
-    2. Updates ML system (via Event bus).
-    3. Calculates local mastery.
-    4. Generates and saves a personalized Learning Path.
-    """
-    if authorization is None:
-        raise HTTPException(status_code=401, detail="Authorization header missing")
-
-    logger.info(f"Processing assessment submission for {submission.student_id}")
-    str_student_id = str(submission.student_id)
-
-    # 1. Grade & Update ML
-    try:
-        assessment_mastery_map = await assessment_service.grade_and_update_ml(client, submission)
-    except Exception as e:
-        logger.error(f"Grading failed: {e}")
-        raise HTTPException(status_code=500, detail="Failed to grade assessment") from e
-
-    # 2. Fetch Raw Path (Structure)
-    kgs_data = await _fetch_kg_path(client, submission.goal_concept_id)
-    if not kgs_data.path:
-        raise HTTPException(status_code=404, detail="No path found for this goal")
-
-    # 3. Fetch Historical Mastery (from ML Service)
-    # We combine historical data with the *just* calculated assessment results.
-    # The assessment results take precedence for the immediate path generation.
-    all_concept_ids = [c.id for c in kgs_data.path]
-    historical_mastery = await _get_mastery_batch(client, str_student_id, all_concept_ids)
-
-    # Merge: Assessment overrides History for this session
-    combined_mastery = {**historical_mastery, **assessment_mastery_map}
-
-    # 4. Run Adaptation Engine
-    us_steps, total_time = adaptation_engine.generate_adaptive_steps(kgs_data.path, combined_mastery)
-
-    if not us_steps:
-        # Edge case: Student knows everything
-        logger.info("Student mastered all concepts via assessment.")
-        # We can create a "Completed" path or a maintenance path.
-        # For now, we return a completed path container.
-        us_path_data = schemas.USLearningPathCreate(
-            goal_concepts=[submission.goal_concept_id], steps=[], estimated_time=0
-        )
-    else:
-        us_path_data = schemas.USLearningPathCreate(
-            goal_concepts=[submission.goal_concept_id],
-            steps=us_steps,
-            estimated_time=total_time,
-        )
-
-    # 5. Save to User Service
-    final_path = await _save_path_to_user_service(client, us_path_data, {"Authorization": authorization})
-
-    logger.success(f"Assessment complete. Generated path with {len(us_steps)} steps.")
-    return final_path
 
 
 async def _send_rl_feedback(
@@ -470,7 +187,7 @@ async def _fetch_user_id(client: httpx.AsyncClient, authorization: str) -> str:
     )
     if resp.status_code != 200:
         raise HTTPException(status_code=401, detail="Invalid User")
-    return str(resp.json()["user_id"])
+    return str(resp.json()["id"])
 
 
 async def _get_prev_mastery(client: httpx.AsyncClient, student_id: str, concept_id: str) -> float:
@@ -572,9 +289,188 @@ async def _trigger_adaptation_logic(
 
 
 @app.post(
-    "/api/v1/steps/quiz/submit",
-    response_model=schemas.StepQuizResult,
+    "/api/v1/students/{student_id}/learning-paths",
+    response_model=schemas.LearningPathResponse,
+    status_code=status.HTTP_201_CREATED,
 )
+async def create_learning_path(
+    student_id: uuid.UUID,
+    request: schemas.LearningPathCreateRequest,
+    authorization: str | None = Header(None),
+    client: httpx.AsyncClient = Depends(get_http_client),
+):
+    logger.info(f"Received path request for student {student_id}...")
+    str_student_id = str(student_id)
+
+    if authorization is None:
+        raise HTTPException(status_code=401, detail="Authorization header missing")
+
+    # 1. Get Raw Path Candidates from KGS
+    try:
+        candidates = await _fetch_kg_candidates(client, request.goal_concept_id, request.start_concept_id)
+    except Exception as e:
+        logger.error(f"KGS candidates fetch failed: {e}")
+        raise HTTPException(status_code=404, detail="No path found") from e
+
+    if not candidates:
+        raise HTTPException(status_code=404, detail="No viable path found")
+
+    # 2. Fetch Profile (for RL)
+    profile = await _get_student_profile(client, str_student_id, authorization)
+
+    # 3. SELECT BEST PATH via RL
+    # We ask RL agent to pick the best candidate based on the full profile
+    best_path_concepts = await adaptation_engine.select_optimal_path(client, str_student_id, candidates, profile)
+
+    # 4. Batch Fetch Mastery (for adaptation)
+    unique_ids = list(set([c.id for c in best_path_concepts]))
+    mastery_map = await _get_mastery_batch(client, str_student_id, unique_ids)
+
+    # 5. Linearize and Adapt
+    us_steps, total_time = adaptation_engine.generate_adaptive_steps(best_path_concepts, mastery_map, profile)
+
+    # 6. Save to User Service
+    us_path_data = schemas.USLearningPathCreate(
+        goal_concepts=[request.goal_concept_id],
+        steps=us_steps,
+        estimated_time=total_time,
+    )
+
+    us_url = f"{config.settings.USER_SERVICE_URL}/api/v1/learning-paths"
+    try:
+        us_response = await client.post(
+            us_url,
+            json=us_path_data.model_dump(),
+            headers={"Authorization": authorization},
+        )
+        us_response.raise_for_status()
+        return us_response.json()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Failed to save path") from e
+
+
+@app.get("/api/v1/students/{student_id}/learning-paths", response_model=list[schemas.LearningPathResponse])
+async def get_student_learning_paths(
+    student_id: str,
+    authorization: str | None = Header(None),
+    client: httpx.AsyncClient = Depends(get_http_client),
+):
+    """
+    Retrieves all learning paths for a specific student from User Service.
+    """
+    us_url = f"{config.settings.USER_SERVICE_URL}/api/v1/students/{student_id}/learning-paths"
+
+    try:
+        logger.info(f"Fetching paths from User Service: {us_url}")
+        us_response = await client.get(us_url, headers={"Authorization": authorization} if authorization else {})
+        us_response.raise_for_status()
+        return us_response.json()
+    except httpx.HTTPStatusError as e:
+        logger.error(f"User Service error: {e.response.text}")
+        if e.response.status_code == 404:
+            return []
+        raise HTTPException(status_code=e.response.status_code, detail="Failed to fetch paths") from e
+    except Exception as e:
+        logger.error(f"Connection error: {e}")
+        raise HTTPException(status_code=500, detail="User Service unavailable") from e
+
+
+@app.get("/api/v1/students/{student_id}/recommendations", response_model=schemas.RecommendationResponse)
+async def get_student_recommendations(
+    student_id: str,
+    authorization: str | None = Header(None),
+    client: httpx.AsyncClient = Depends(get_http_client),
+):
+    """
+    Recommendation orchestrator using RL:
+    1. Get Student Profile.
+    2. Get Mastery Map.
+    3. Filter 'known' concepts.
+    4. Ask KGS for candidates (next possible steps).
+    5. Ask RL Agent to select the single best concept from candidates.
+    6. Return it.
+    """
+    logger.info(f"Generating recommendations for student {student_id}")
+
+    # 1. Fetch Profile
+    profile = await _get_student_profile(client, student_id, authorization or "")
+
+    # 2. Receive Mastery Map
+    try:
+        ml_url = f"{config.settings.ML_SERVICE_URL}/api/v1/students/{student_id}/mastery"
+        ml_response = await client.get(ml_url)
+        ml_response.raise_for_status()
+        mastery_map = ml_response.json().get("mastery_map", {})
+    except Exception:
+        mastery_map = {}
+
+    # 3. Identify Known Concepts (Mastery > 0.7)
+    known_ids = [cid for cid, score in mastery_map.items() if score > 0.7]
+
+    # 4. Ask KGS for Candidates
+    # KGS returns a list of concepts that logically follow the known ones
+    try:
+        kg_url = f"{config.settings.KG_SERVICE_URL}/api/v1/recommendations"
+        # We ask for a few candidates (limit=5) to give the RL agent some choices
+        kg_response = await client.post(kg_url, json={"known_concept_ids": known_ids, "limit": 5})
+        kg_response.raise_for_status()
+        concepts_data = kg_response.json().get("recommendations", [])
+        # Convert to objects
+        candidates = [schemas.KGSConcept(**c) for c in concepts_data]
+    except Exception as e:
+        logger.error(f"Failed to fetch recommendations from KG: {e}")
+        raise HTTPException(status_code=500, detail="Recommendation generation failed") from e
+
+    if not candidates:
+        return schemas.RecommendationResponse(recommendations=[])
+
+    # 5. RL Selection
+    # We ask the RL engine to pick the BEST one from the 5 candidates
+    best_concept = await adaptation_engine.select_optimal_path_concept(client, student_id, candidates, profile)
+
+    # If RL fails or returns nothing, fallback to first
+    if not best_concept:
+        best_concept = candidates[0]
+
+    # 6. Format Response
+    # We return the Best concept first, followed by others (optional, here we return list)
+    # Re-ordering list to put best first
+    final_list = [best_concept] + [c for c in candidates if c.id != best_concept.id]
+
+    formatted_recs = []
+    for i, concept in enumerate(final_list):
+        formatted_recs.append(
+            schemas.LearningStep(
+                id=uuid.uuid4(),
+                step_number=i + 1,
+                concept_id=concept.id,
+                resources=[r.model_dump() for r in concept.resources],
+                status="pending",
+                estimated_time=concept.estimated_time,
+                difficulty=concept.difficulty,
+                description=concept.description,
+            )
+        )
+
+    return schemas.RecommendationResponse(recommendations=formatted_recs)
+
+
+@app.get("/api/v1/quizzes/{concept_id}", response_model=schemas.QuizResponse)
+async def get_quiz_for_concept(concept_id: str, client: httpx.AsyncClient = Depends(get_http_client)):
+    """
+    Receives a test for the concept from the Knowledge Graph Service.
+    """
+    try:
+        kg_url = f"{config.settings.KG_SERVICE_URL}/api/v1/concepts/{concept_id}/quiz"
+        response = await client.get(kg_url)
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        logger.error(f"Failed to fetch quiz: {e}")
+        return {"questions": []}
+
+
+@app.post("/api/v1/steps/quiz/submit", response_model=schemas.StepQuizResult)
 async def submit_step_quiz(
     submission: schemas.StepQuizSubmission,
     authorization: str | None = Header(None),
@@ -599,6 +495,89 @@ async def submit_step_quiz(
         message=final_message,
         adaptation_occurred=adaptation_occurred,
     )
+
+
+@app.post("/api/v1/assessments/start", response_model=schemas.AssessmentSession, status_code=status.HTTP_200_OK)
+async def start_initial_assessment(
+    request: schemas.AssessmentStartRequest,
+    client: httpx.AsyncClient = Depends(get_http_client),
+):
+    """
+    Generates an initial test session for the requested Goal.
+    """
+    logger.info(f"Generating assessment for student {request.student_id}")
+    try:
+        session = await assessment_service.generate_assessment(client, request.goal_concept_id, str(request.student_id))
+        return session
+    except Exception as e:
+        logger.error(f"Error starting assessment: {e}")
+        raise HTTPException(status_code=500, detail="Failed to generate assessment") from e
+
+
+@app.post(
+    "/api/v1/assessments/submit", response_model=schemas.LearningPathResponse, status_code=status.HTTP_201_CREATED
+)
+async def submit_assessment(
+    submission: schemas.AssessmentSubmission,
+    authorization: str | None = Header(None),
+    client: httpx.AsyncClient = Depends(get_http_client),
+):
+    """
+    1. Grades the assessment against KGS data.
+    2. Updates ML system (via Event bus).
+    3. Calculates local mastery.
+    4. Generates and saves a personalized Learning Path.
+    """
+    if authorization is None:
+        raise HTTPException(status_code=401, detail="Authorization header missing")
+
+    logger.info(f"Processing assessment submission for {submission.student_id}")
+    str_student_id = str(submission.student_id)
+
+    # 1. Grade & Update ML
+    try:
+        assessment_mastery_map = await assessment_service.grade_and_update_ml(client, submission)
+    except Exception as e:
+        logger.error(f"Grading failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to grade assessment") from e
+
+    # 2. Fetch Raw Path (Structure)
+    kgs_data = await _fetch_kg_path(client, submission.goal_concept_id)
+    if not kgs_data.path:
+        raise HTTPException(status_code=404, detail="No path found for this goal")
+
+    # 3. Fetch Historical Mastery (from ML Service)
+    # We combine historical data with the *just* calculated assessment results.
+    # The assessment results take precedence for the immediate path generation.
+    all_concept_ids = [c.id for c in kgs_data.path]
+    historical_mastery = await _get_mastery_batch(client, str_student_id, all_concept_ids)
+
+    # Merge: Assessment overrides History for this session
+    combined_mastery = {**historical_mastery, **assessment_mastery_map}
+
+    # 4. Run Adaptation Engine
+    us_steps, total_time = adaptation_engine.generate_adaptive_steps(kgs_data.path, combined_mastery)
+
+    if not us_steps:
+        # Edge case: Student knows everything
+        logger.info("Student mastered all concepts via assessment.")
+        # We can create a "Completed" path or a maintenance path.
+        # For now, we return a completed path container.
+        us_path_data = schemas.USLearningPathCreate(
+            goal_concepts=[submission.goal_concept_id], steps=[], estimated_time=0
+        )
+    else:
+        us_path_data = schemas.USLearningPathCreate(
+            goal_concepts=[submission.goal_concept_id],
+            steps=us_steps,
+            estimated_time=total_time,
+        )
+
+    # 5. Save to User Service
+    final_path = await _save_path_to_user_service(client, us_path_data, {"Authorization": authorization})
+
+    logger.success(f"Assessment complete. Generated path with {len(us_steps)} steps.")
+    return final_path
 
 
 @app.get("/health")

@@ -32,6 +32,6 @@ class DKT(nn.Module):
 
 # Factory function for model initialization
 def get_model(config):
-    model = DKT(config.INPUT_DIM, config.HIDDEN_DIM, config.LAYER_DIM, config.OUTPUT_DIM)
+    model = DKT(config.INPUT_DIM_DKT, config.HIDDEN_DIM, config.LAYER_DIM, config.OUTPUT_DIM_DKT)
     model.eval()  # Set inference mode (no training)
     return model

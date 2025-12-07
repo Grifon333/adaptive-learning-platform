@@ -96,10 +96,14 @@ class AnalyticsRepository:
         p_idx = BehavioralMathEngine.calculate_procrastination_index(events)
         g_score = BehavioralMathEngine.calculate_gaming_score(events)
         e_score = BehavioralMathEngine.calculate_engagement_score(events)
+        h_rate = BehavioralMathEngine.calculate_hint_rate(events)
+        err_rate = BehavioralMathEngine.calculate_recent_error_rate(events)
 
         return {
             "student_id": student_id,
             "procrastination_index": round(p_idx, 4),
             "gaming_score": round(g_score, 4),
             "engagement_score": round(e_score, 4),
+            "hint_rate": round(h_rate, 4),
+            "error_rate": round(err_rate, 4),
         }

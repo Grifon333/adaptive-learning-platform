@@ -35,11 +35,11 @@ class RLAgent:
     Manages the DQN policy, exploration (epsilon-greedy), and experience replay.
     """
 
-    def __init__(self, input_dim: int, output_dim: int, device="cpu", model_path="/data/rl_model.pth"):
+    def __init__(self, input_dim: int, output_dim: int, device="cpu"):
         self.input_dim = input_dim
         self.output_dim = output_dim
         self.device = device
-        self.model_path = model_path
+        self.model_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "rl_model.pth")
 
         # Policy Network
         self.policy_net = DQN(input_dim, output_dim).to(device)

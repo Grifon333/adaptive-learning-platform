@@ -21,9 +21,10 @@ class DashboardData(BaseModel):
     weakest_concepts: list[WeaknessItem]
     activity_last_7_days: list[ActivityPoint]
 
-
 class BehavioralUpdatePayload(BaseModel):
     student_id: UUID
     procrastination_index: float
     gaming_score: float
     engagement_score: float
+    hint_rate: float
+    error_rate: float

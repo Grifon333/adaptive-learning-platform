@@ -13,45 +13,107 @@ class ProfilePreferencesScreen extends StatefulWidget {
 }
 
 class _ProfilePreferencesScreenState extends State<ProfilePreferencesScreen> {
+  // Cognitive
   late double _attention;
+  late double _memory;
+
+  // Learning Styles (VARK)
   late double _visual;
+  late double _auditory;
   late double _reading;
+  late double _kinesthetic;
 
   @override
   void initState() {
     super.initState();
-    _attention = (widget.profile.cognitiveProfile['attention'] as num?)?.toDouble() ?? 0.5;
-    _visual = (widget.profile.learningPreferences['visual'] as num?)?.toDouble() ?? 0.5;
-    _reading = (widget.profile.learningPreferences['reading'] as num?)?.toDouble() ?? 0.5;
+    final cog = widget.profile.cognitiveProfile;
+    final prefs = widget.profile.learningPreferences;
+
+    _attention = (cog['attention'] as num?)?.toDouble() ?? 0.5;
+    _memory = (cog['memory'] as num?)?.toDouble() ?? 0.5;
+
+    _visual = (prefs['visual'] as num?)?.toDouble() ?? 0.25;
+    _auditory = (prefs['auditory'] as num?)?.toDouble() ?? 0.25;
+    _reading = (prefs['reading'] as num?)?.toDouble() ?? 0.25;
+    _kinesthetic = (prefs['kinesthetic'] as num?)?.toDouble() ?? 0.25;
   }
 
   void _save() {
     context.read<ProfileBloc>().add(
       ProfileUpdateRequested(
-        cognitive: {'attention': _attention},
-        preferences: {'visual': _visual, 'reading': _reading},
+        cognitiveProfile: {'attention': _attention, 'memory': _memory},
+        learningPreferences: {
+          'visual': _visual,
+          'auditory': _auditory,
+          'reading': _reading,
+          'kinesthetic': _kinesthetic,
+          'pace': 'medium',
+        },
       ),
     );
     context.pop();
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Preferences updated successfully')));
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Personalization Settings')),
+      appBar: AppBar(
+        title: const Text('Personalization Settings'),
+        actions: [IconButton(icon: const Icon(Icons.check), onPressed: _save)],
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          _SectionHeader('Cognitive Profile'),
-          const Text('Affects estimated time and path complexity.'),
-          _SliderWidget('Attention Span', _attention, (v) => setState(() => _attention = v)),
+          _SectionHeader(title: 'Cognitive Profile', subtitle: 'AI uses this to adjust session length and complexity.'),
+          _SliderWidget(
+            label: 'Attention Span',
+            icon: Icons.access_time,
+            value: _attention,
+            onChanged: (v) => setState(() => _attention = v),
+          ),
+          _SliderWidget(
+            label: 'Memory Retention',
+            icon: Icons.psychology,
+            value: _memory,
+            onChanged: (v) => setState(() => _memory = v),
+          ),
           const Divider(height: 32),
-          _SectionHeader('Learning Style (VARK)'),
-          const Text('Affects resource sorting (Video vs Text).'),
-          _SliderWidget('Visual (Video preference)', _visual, (v) => setState(() => _visual = v)),
-          _SliderWidget('Reading/Writing (Text preference)', _reading, (v) => setState(() => _reading = v)),
+          _SectionHeader(
+            title: 'Learning Style (VARK)',
+            subtitle: 'This influences the type of resources recommended (Video vs Text vs Interactive).',
+          ),
+          _SliderWidget(
+            label: 'Visual (Video/Images)',
+            icon: Icons.visibility,
+            value: _visual,
+            onChanged: (v) => setState(() => _visual = v),
+          ),
+          _SliderWidget(
+            label: 'Auditory (Listening)',
+            icon: Icons.headphones,
+            value: _auditory,
+            onChanged: (v) => setState(() => _auditory = v),
+          ),
+          _SliderWidget(
+            label: 'Reading/Writing (Text)',
+            icon: Icons.article,
+            value: _reading,
+            onChanged: (v) => setState(() => _reading = v),
+          ),
+          _SliderWidget(
+            label: 'Kinesthetic (Interactive)',
+            icon: Icons.touch_app,
+            value: _kinesthetic,
+            onChanged: (v) => setState(() => _kinesthetic = v),
+          ),
           const SizedBox(height: 32),
-          ElevatedButton(onPressed: _save, child: const Text('Save Preferences')),
+          FilledButton.icon(
+            onPressed: _save,
+            icon: const Icon(Icons.save),
+            label: const Text('Save Preferences'),
+            style: FilledButton.styleFrom(padding: const EdgeInsets.all(16)),
+          ),
         ],
       ),
     );
@@ -59,40 +121,49 @@ class _ProfilePreferencesScreenState extends State<ProfilePreferencesScreen> {
 }
 
 class _SectionHeader extends StatelessWidget {
-  const _SectionHeader(this.title);
+  const _SectionHeader({required this.title, required this.subtitle});
 
   final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      child: Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-    );
-  }
-}
-
-class _SliderWidget extends StatelessWidget {
-  const _SliderWidget(this.label, this.value, this.onChanged);
-
-  final String label;
-  final double value;
-  final ValueChanged<double> onChanged;
+  final String subtitle;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SizedBox(height: 12),
+        Text(title, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+        const SizedBox(height: 4),
+        Text(subtitle, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey[600])),
+        const SizedBox(height: 16),
+      ],
+    );
+  }
+}
+
+class _SliderWidget extends StatelessWidget {
+  const _SliderWidget({required this.label, required this.icon, required this.value, required this.onChanged});
+
+  final String label;
+  final IconData icon;
+  final double value;
+  final ValueChanged<double> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
         Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(label, style: const TextStyle(fontWeight: FontWeight.w500)),
-            Text('${(value * 100).toInt()}%', style: const TextStyle(color: Colors.grey)),
+            Icon(icon, size: 20, color: Colors.blueGrey),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(label, style: const TextStyle(fontWeight: FontWeight.w500)),
+            ),
+            Text('${(value * 100).toInt()}%', style: const TextStyle(fontWeight: FontWeight.bold)),
           ],
         ),
-        Slider(value: value, onChanged: onChanged),
+        Slider(value: value, onChanged: onChanged, activeColor: Colors.blue, inactiveColor: Colors.blue.shade50),
+        const SizedBox(height: 8),
       ],
     );
   }

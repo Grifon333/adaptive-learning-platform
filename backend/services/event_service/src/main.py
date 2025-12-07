@@ -22,11 +22,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Event Service", lifespan=lifespan)
 
 
-@app.post(
-    "/api/v1/events",
-    status_code=status.HTTP_202_ACCEPTED,
-    summary="Accept single event",
-)
+@app.post("/api/v1/events", status_code=status.HTTP_202_ACCEPTED, summary="Accept single event")
 async def ingest_event(event: schemas.EventCreate):
     """
     Accepts the event and puts it in the queue for saving.
@@ -45,11 +41,7 @@ async def ingest_event(event: schemas.EventCreate):
     return {"status": "accepted", "task_id": task_result.id}
 
 
-@app.post(
-    "/api/v1/events/batch",
-    status_code=status.HTTP_202_ACCEPTED,
-    summary="Accept batch of events",
-)
+@app.post("/api/v1/events/batch", status_code=status.HTTP_202_ACCEPTED, summary="Accept batch of events")
 async def ingest_batch_events(batch: schemas.EventBatchCreate):
     """
     Accepts a list of events for bulk processing.

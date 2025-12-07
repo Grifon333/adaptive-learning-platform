@@ -1,7 +1,7 @@
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 # --- Request ---
 
@@ -153,17 +153,22 @@ class AssessmentSubmission(BaseModel):
     answers: dict[str, int]  # {question_id: selected_option_index}
 
 
-class AssessmentResult(BaseModel):
-    student_id: UUID
-    mastery_scores: dict[str, float]  # {concept_id: score}
-
-
 # --- User Service Integration Schemas ---
 
 
 class StudentProfile(BaseModel):
     id: UUID
-    user_id: UUID
+    email: str
+    first_name: str
+    last_name: str
+    role: str
+
+    # Profile Data
     cognitive_profile: dict[str, Any] = {}  # {"attention": 0.5, "memory": 0.6}
     learning_preferences: dict[str, Any] = {}  # {"visual": 0.8, "reading": 0.2}
+    learning_goals: list[str] = []
+    study_schedule: dict[str, Any] = {}
     timezone: str | None = None
+    privacy_settings: dict[str, Any] = {}
+
+    model_config = ConfigDict(from_attributes=True)

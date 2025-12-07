@@ -67,6 +67,18 @@ async def create_concept(concept: schemas.ConceptCreate, db: AsyncSession = Depe
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
+@app.get("/api/v1/concepts", response_model=schemas.ConceptListResponse)
+async def get_all_concepts(skip: int = 0, limit: int = 100, db: AsyncSession = Depends(get_db_session)):
+    count = await (await db.run("MATCH (c:Concept) RETURN count(c) as total")).single()
+    total = count["total"] if count else 0
+
+    result = await db.run(
+        "MATCH (c:Concept) RETURN c ORDER BY c.name SKIP $skip LIMIT $limit", {"skip": skip, "limit": limit}
+    )
+    items = [schemas.Concept(**dict(r["c"])) async for r in result]
+    return schemas.ConceptListResponse(total=total, items=items)
+
+
 @app.get("/api/v1/concepts/{concept_id}", response_model=schemas.Concept)
 async def get_concept_details(concept_id: str, db: AsyncSession = Depends(get_db_session)):
     query = (
@@ -90,54 +102,35 @@ async def get_concept_details(concept_id: str, db: AsyncSession = Depends(get_db
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-# --- Resource Endpoints ---
-
-
-@app.post("/api/v1/resources", response_model=schemas.Resource, status_code=status.HTTP_201_CREATED)
-async def create_resource(resource: schemas.ResourceCreate, db: AsyncSession = Depends(get_db_session)):
-    """Creates a new learning resource node."""
-    res_id = str(uuid.uuid4())
-    query = (
-        "CREATE (r:Resource { "
-        "id: $id, title: $title, type: $type, url: $url, "
-        "duration: $duration, difficulty: $difficulty "
-        "}) RETURN r"
-    )
+@app.put("/api/v1/concepts/{concept_id}", response_model=schemas.Concept)
+async def update_concept(
+    concept_id: str, update_data: schemas.ConceptUpdate, db: AsyncSession = Depends(get_db_session)
+):
+    fields = update_data.model_dump(exclude_unset=True)
+    if not fields:
+        raise HTTPException(status_code=400, detail="No fields")
+    set_clauses = ", ".join([f"c.{k} = ${k}" for k in fields.keys()])
+    query = f"MATCH (c:Concept {{id: $id}}) SET {set_clauses} RETURN c"
     try:
-        result = await db.run(
-            query,
-            {
-                "id": res_id,
-                "title": resource.title,
-                "type": resource.type,
-                "url": resource.url,
-                "duration": resource.duration,
-                "difficulty": resource.difficulty,
-            },
-        )
+        result = await db.run(query, {"id": concept_id, **fields})
         record = await result.single()
         if not record:
-            raise HTTPException(status_code=500, detail="Failed to create resource")
-        return schemas.Resource(**dict(record["r"]))
+            raise HTTPException(status_code=404, detail="Not found")
+        return schemas.Concept(**dict(record["c"]))
     except Exception as e:
-        logger.error(f"Error creating resource: {e}")
+        logger.error(f"Update error: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@app.post("/api/v1/concepts/{concept_id}/resources", status_code=status.HTTP_200_OK)
-async def add_resource_to_concept(concept_id: str, resource_id: str, db: AsyncSession = Depends(get_db_session)):
-    query = "MATCH (c:Concept {id: $cid}), (r:Resource {id: $rid}) MERGE (c)-[:HAS_RESOURCE]->(r) RETURN c"
+@app.delete("/api/v1/concepts/{concept_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_concept(concept_id: str, db: AsyncSession = Depends(get_db_session)):
     try:
-        result = await db.run(query, {"cid": concept_id, "rid": resource_id})
-        if not await result.single():
-            raise HTTPException(status_code=404, detail="Concept or Resource not found")
-        return {"message": "Resource linked successfully"}
+        if not await (await db.run("MATCH (c:Concept {id: $id}) RETURN c", {"id": concept_id})).single():
+            raise HTTPException(status_code=404, detail="Not found")
+        await db.run("MATCH (c:Concept {id: $id}) DETACH DELETE c", {"id": concept_id})
     except Exception as e:
-        logger.error(f"Error linking resource: {e}")
+        logger.error(f"Delete error: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
-
-
-# --- Relationship & Path Endpoints ---
 
 
 @app.post("/api/v1/relationships", status_code=status.HTTP_201_CREATED)
@@ -200,6 +193,25 @@ async def create_relationship(rel: schemas.RelationshipCreate, db: AsyncSession 
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
+@app.get("/api/v1/concepts/{concept_id}/prerequisites", response_model=schemas.ConceptListResponse)
+async def get_concept_prerequisites(concept_id: str, db: AsyncSession = Depends(get_db_session)):
+    query = (
+        "MATCH (c:Concept {id: $id})<-[:PREREQUISITE]-(p:Concept) "
+        "OPTIONAL MATCH (p)-[:HAS_RESOURCE]->(r:Resource) "
+        "RETURN p, collect(r) as resources"
+    )
+    try:
+        result = await db.run(query, {"id": concept_id})
+        items = []
+        async for record in result:
+            res_objs = [schemas.Resource(**dict(r)) for r in record["resources"] if r]
+            items.append(schemas.Concept(**dict(record["p"]), resources=res_objs))
+        return schemas.ConceptListResponse(total=len(items), items=items)
+    except Exception as e:
+        logger.error(f"Prereq error: {e}")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
 @app.delete("/api/v1/relationships", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_relationship(rel: schemas.RelationshipDelete, db: AsyncSession = Depends(get_db_session)):
     """Deletes relationships. Handles bidirectional cleanup for RELATED_TO."""
@@ -213,6 +225,131 @@ async def delete_relationship(rel: schemas.RelationshipDelete, db: AsyncSession 
     except Exception as e:
         logger.error(f"Delete rel error: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+# --- Resource Endpoints ---
+
+
+@app.post("/api/v1/resources", response_model=schemas.Resource, status_code=status.HTTP_201_CREATED)
+async def create_resource(resource: schemas.ResourceCreate, db: AsyncSession = Depends(get_db_session)):
+    """Creates a new learning resource node."""
+    res_id = str(uuid.uuid4())
+    query = (
+        "CREATE (r:Resource { "
+        "id: $id, title: $title, type: $type, url: $url, "
+        "duration: $duration, difficulty: $difficulty "
+        "}) RETURN r"
+    )
+    try:
+        result = await db.run(
+            query,
+            {
+                "id": res_id,
+                "title": resource.title,
+                "type": resource.type,
+                "url": resource.url,
+                "duration": resource.duration,
+                "difficulty": resource.difficulty,
+            },
+        )
+        record = await result.single()
+        if not record:
+            raise HTTPException(status_code=500, detail="Failed to create resource")
+        return schemas.Resource(**dict(record["r"]))
+    except Exception as e:
+        logger.error(f"Error creating resource: {e}")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@app.post("/api/v1/uploads", status_code=status.HTTP_201_CREATED)
+async def upload_file(request: Request, file: UploadFile = File(...)):
+    """Uploads a file to the server and returns a direct URL."""
+    try:
+        filename = file.filename or ""
+        ext = filename.rsplit(".", 1)[-1] if "." in filename else "bin"
+        unique_name = f"{uuid.uuid4()}.{ext}"
+        path = os.path.join(UPLOAD_DIR, unique_name)
+        with open(path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        base_url = str(request.base_url).rstrip("/")
+        return {"filename": unique_name, "url": f"{base_url}/static/{unique_name}", "content_type": file.content_type}
+    except Exception as e:
+        logger.error(f"Upload error: {e}")
+        raise HTTPException(status_code=500, detail="Upload failed") from e
+
+
+@app.get("/api/v1/resources", response_model=schemas.ResourceListResponse)
+async def get_all_resources(skip: int = 0, limit: int = 100, db: AsyncSession = Depends(get_db_session)):
+    count = await (await db.run("MATCH (r:Resource) RETURN count(r) as total")).single()
+    total = count["total"] if count else 0
+    result = await db.run(
+        "MATCH (r:Resource) RETURN r ORDER BY r.title SKIP $skip LIMIT $limit", {"skip": skip, "limit": limit}
+    )
+    items = [schemas.Resource(**dict(r["r"])) async for r in result]
+    return schemas.ResourceListResponse(total=total, items=items)
+
+
+@app.put("/api/v1/resources/{resource_id}", response_model=schemas.Resource)
+async def update_resource(
+    resource_id: str, update_data: schemas.ResourceUpdate, db: AsyncSession = Depends(get_db_session)
+):
+    fields = update_data.model_dump(exclude_unset=True)
+    if not fields:
+        raise HTTPException(status_code=400, detail="No fields")
+    set_clauses = ", ".join([f"r.{k} = ${k}" for k in fields.keys()])
+    query = f"MATCH (r:Resource {{id: $id}}) SET {set_clauses} RETURN r"
+    try:
+        result = await db.run(query, {"id": resource_id, **fields})
+        record = await result.single()
+        if not record:
+            raise HTTPException(status_code=404, detail="Not found")
+        return schemas.Resource(**dict(record["r"]))
+    except Exception as e:
+        logger.error(f"Res update error: {e}")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@app.delete("/api/v1/resources/{resource_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_resource(resource_id: str, db: AsyncSession = Depends(get_db_session)):
+    try:
+        if not await (await db.run("MATCH (r:Resource {id: $id}) RETURN r", {"id": resource_id})).single():
+            raise HTTPException(status_code=404, detail="Not found")
+        await db.run("MATCH (r:Resource {id: $id}) DETACH DELETE r", {"id": resource_id})
+    except Exception as e:
+        logger.error(f"Res delete error: {e}")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@app.post("/api/v1/concepts/{concept_id}/resources", status_code=status.HTTP_200_OK)
+async def add_resource_to_concept(concept_id: str, resource_id: str, db: AsyncSession = Depends(get_db_session)):
+    query = "MATCH (c:Concept {id: $cid}), (r:Resource {id: $rid}) MERGE (c)-[:HAS_RESOURCE]->(r) RETURN c"
+    try:
+        result = await db.run(query, {"cid": concept_id, "rid": resource_id})
+        if not await result.single():
+            raise HTTPException(status_code=404, detail="Concept or Resource not found")
+        return {"message": "Resource linked successfully"}
+    except Exception as e:
+        logger.error(f"Error linking resource: {e}")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@app.delete("/api/v1/concepts/{concept_id}/resources/{resource_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_resource_from_concept(concept_id: str, resource_id: str, db: AsyncSession = Depends(get_db_session)):
+    query = "MATCH (c:Concept {id: $cid})-[rel:HAS_RESOURCE]->(r:Resource {id: $rid}) DELETE rel"
+    try:
+        check = await db.run(
+            "MATCH (c:Concept {id: $cid})-[rel:HAS_RESOURCE]->(r:Resource {id: $rid}) RETURN rel",
+            {"cid": concept_id, "rid": resource_id},
+        )
+        if not await check.single():
+            raise HTTPException(status_code=404, detail="Link not found")
+        await db.run(query, {"cid": concept_id, "rid": resource_id})
+    except Exception as e:
+        logger.error(f"Unlink error: {e}")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+# --- Path Endpoints ---
 
 
 @app.get("/api/v1/path", response_model=schemas.PathResponse)
@@ -446,146 +583,6 @@ async def get_questions_batch(req: schemas.BatchQuestionsRequest, db: AsyncSessi
         return schemas.BatchQuestionsResponse(data=data)
     except Exception as e:
         logger.error(f"Batch Q error: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
-
-
-# --- CRUD Basics ---
-
-
-@app.get("/api/v1/concepts", response_model=schemas.ConceptListResponse)
-async def get_all_concepts(skip: int = 0, limit: int = 100, db: AsyncSession = Depends(get_db_session)):
-    count = await (await db.run("MATCH (c:Concept) RETURN count(c) as total")).single()
-    total = count["total"] if count else 0
-
-    result = await db.run(
-        "MATCH (c:Concept) RETURN c ORDER BY c.name SKIP $skip LIMIT $limit", {"skip": skip, "limit": limit}
-    )
-    items = [schemas.Concept(**dict(r["c"])) async for r in result]
-    return schemas.ConceptListResponse(total=total, items=items)
-
-
-@app.put("/api/v1/concepts/{concept_id}", response_model=schemas.Concept)
-async def update_concept(
-    concept_id: str, update_data: schemas.ConceptUpdate, db: AsyncSession = Depends(get_db_session)
-):
-    fields = update_data.model_dump(exclude_unset=True)
-    if not fields:
-        raise HTTPException(status_code=400, detail="No fields")
-    set_clauses = ", ".join([f"c.{k} = ${k}" for k in fields.keys()])
-    query = f"MATCH (c:Concept {{id: $id}}) SET {set_clauses} RETURN c"
-    try:
-        result = await db.run(query, {"id": concept_id, **fields})
-        record = await result.single()
-        if not record:
-            raise HTTPException(status_code=404, detail="Not found")
-        return schemas.Concept(**dict(record["c"]))
-    except Exception as e:
-        logger.error(f"Update error: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
-
-
-@app.delete("/api/v1/concepts/{concept_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_concept(concept_id: str, db: AsyncSession = Depends(get_db_session)):
-    try:
-        if not await (await db.run("MATCH (c:Concept {id: $id}) RETURN c", {"id": concept_id})).single():
-            raise HTTPException(status_code=404, detail="Not found")
-        await db.run("MATCH (c:Concept {id: $id}) DETACH DELETE c", {"id": concept_id})
-    except Exception as e:
-        logger.error(f"Delete error: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
-
-
-@app.get("/api/v1/resources", response_model=schemas.ResourceListResponse)
-async def get_all_resources(skip: int = 0, limit: int = 100, db: AsyncSession = Depends(get_db_session)):
-    count = await (await db.run("MATCH (r:Resource) RETURN count(r) as total")).single()
-    total = count["total"] if count else 0
-    result = await db.run(
-        "MATCH (r:Resource) RETURN r ORDER BY r.title SKIP $skip LIMIT $limit", {"skip": skip, "limit": limit}
-    )
-    items = [schemas.Resource(**dict(r["r"])) async for r in result]
-    return schemas.ResourceListResponse(total=total, items=items)
-
-
-@app.put("/api/v1/resources/{resource_id}", response_model=schemas.Resource)
-async def update_resource(
-    resource_id: str, update_data: schemas.ResourceUpdate, db: AsyncSession = Depends(get_db_session)
-):
-    fields = update_data.model_dump(exclude_unset=True)
-    if not fields:
-        raise HTTPException(status_code=400, detail="No fields")
-    set_clauses = ", ".join([f"r.{k} = ${k}" for k in fields.keys()])
-    query = f"MATCH (r:Resource {{id: $id}}) SET {set_clauses} RETURN r"
-    try:
-        result = await db.run(query, {"id": resource_id, **fields})
-        record = await result.single()
-        if not record:
-            raise HTTPException(status_code=404, detail="Not found")
-        return schemas.Resource(**dict(record["r"]))
-    except Exception as e:
-        logger.error(f"Res update error: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
-
-
-@app.delete("/api/v1/resources/{resource_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_resource(resource_id: str, db: AsyncSession = Depends(get_db_session)):
-    try:
-        if not await (await db.run("MATCH (r:Resource {id: $id}) RETURN r", {"id": resource_id})).single():
-            raise HTTPException(status_code=404, detail="Not found")
-        await db.run("MATCH (r:Resource {id: $id}) DETACH DELETE r", {"id": resource_id})
-    except Exception as e:
-        logger.error(f"Res delete error: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
-
-
-@app.delete("/api/v1/concepts/{concept_id}/resources/{resource_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def remove_resource_from_concept(concept_id: str, resource_id: str, db: AsyncSession = Depends(get_db_session)):
-    query = "MATCH (c:Concept {id: $cid})-[rel:HAS_RESOURCE]->(r:Resource {id: $rid}) DELETE rel"
-    try:
-        check = await db.run(
-            "MATCH (c:Concept {id: $cid})-[rel:HAS_RESOURCE]->(r:Resource {id: $rid}) RETURN rel",
-            {"cid": concept_id, "rid": resource_id},
-        )
-        if not await check.single():
-            raise HTTPException(status_code=404, detail="Link not found")
-        await db.run(query, {"cid": concept_id, "rid": resource_id})
-    except Exception as e:
-        logger.error(f"Unlink error: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
-
-
-@app.post("/api/v1/uploads", status_code=status.HTTP_201_CREATED)
-async def upload_file(request: Request, file: UploadFile = File(...)):
-    """Uploads a file to the server and returns a direct URL."""
-    try:
-        filename = file.filename or ""
-        ext = filename.rsplit(".", 1)[-1] if "." in filename else "bin"
-        unique_name = f"{uuid.uuid4()}.{ext}"
-        path = os.path.join(UPLOAD_DIR, unique_name)
-        with open(path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-        base_url = str(request.base_url).rstrip("/")
-        return {"filename": unique_name, "url": f"{base_url}/static/{unique_name}", "content_type": file.content_type}
-    except Exception as e:
-        logger.error(f"Upload error: {e}")
-        raise HTTPException(status_code=500, detail="Upload failed") from e
-
-
-@app.get("/api/v1/concepts/{concept_id}/prerequisites", response_model=schemas.ConceptListResponse)
-async def get_concept_prerequisites(concept_id: str, db: AsyncSession = Depends(get_db_session)):
-    query = (
-        "MATCH (c:Concept {id: $id})<-[:PREREQUISITE]-(p:Concept) "
-        "OPTIONAL MATCH (p)-[:HAS_RESOURCE]->(r:Resource) "
-        "RETURN p, collect(r) as resources"
-    )
-    try:
-        result = await db.run(query, {"id": concept_id})
-        items = []
-        async for record in result:
-            res_objs = [schemas.Resource(**dict(r)) for r in record["resources"] if r]
-            items.append(schemas.Concept(**dict(record["p"]), resources=res_objs))
-        return schemas.ConceptListResponse(total=len(items), items=items)
-    except Exception as e:
-        logger.error(f"Prereq error: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 

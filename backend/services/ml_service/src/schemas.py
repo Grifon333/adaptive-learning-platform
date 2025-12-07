@@ -47,6 +47,8 @@ class BehavioralProfileUpdate(BaseModel):
     procrastination_index: float
     gaming_score: float
     engagement_score: float
+    hint_rate: float
+    error_rate: float
 
 
 class BehavioralProfileResponse(BaseModel):
