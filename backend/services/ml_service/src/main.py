@@ -95,7 +95,12 @@ def update_student_behavior(request: schemas.BehavioralProfileUpdate):
     """
     try:
         update_behavioral_profile(
-            str(request.student_id), request.procrastination_index, request.gaming_score, request.engagement_score
+            str(request.student_id),
+            request.procrastination_index,
+            request.gaming_score,
+            request.engagement_score,
+            request.hint_rate,
+            request.error_rate,
         )
         return {
             "student_id": request.student_id,
@@ -103,6 +108,8 @@ def update_student_behavior(request: schemas.BehavioralProfileUpdate):
                 "procrastination_index": request.procrastination_index,
                 "gaming_score": request.gaming_score,
                 "engagement_score": request.engagement_score,
+                "hint_rate": request.hint_rate,
+                "error_rate": request.error_rate,
             },
         }
     except Exception as e:

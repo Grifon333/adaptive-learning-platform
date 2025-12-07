@@ -39,9 +39,6 @@ async def _get_student_profile(
     """
     Fetches student profile from User Service.
     """
-    url = f"{config.settings.USER_SERVICE_URL}/api/v1/users/{student_id}/profile"  # Assuming admin/internal endpoint
-    # OR reuse /me/profile if we proxy the user's token.
-    # Since the request comes FROM the user, we can use /me/profile with their token.
     url = f"{config.settings.USER_SERVICE_URL}/api/v1/users/me/profile"
 
     try:
@@ -190,7 +187,7 @@ async def _fetch_user_id(client: httpx.AsyncClient, authorization: str) -> str:
     )
     if resp.status_code != 200:
         raise HTTPException(status_code=401, detail="Invalid User")
-    return str(resp.json()["user_id"])
+    return str(resp.json()["id"])
 
 
 async def _get_prev_mastery(client: httpx.AsyncClient, student_id: str, concept_id: str) -> float:

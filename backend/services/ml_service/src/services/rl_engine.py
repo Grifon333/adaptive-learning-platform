@@ -7,7 +7,7 @@ from ..database import get_all_student_knowledge, get_behavioral_profile
 from ..models.rl import RLAgent
 from ..utils import CONCEPT_TO_INDEX, get_concept_index
 
-INPUT_DIM = settings.INPUT_DIM_RL
+INPUT_DIM = settings.INPUT_DIM_RL + 11
 OUTPUT_DIM = settings.OUTPUT_DIM_RL
 
 rl_agent = RLAgent(INPUT_DIM, OUTPUT_DIM)

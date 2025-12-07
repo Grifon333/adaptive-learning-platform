@@ -101,7 +101,9 @@ def append_interaction(student_id: str, concept_id: str, is_correct: bool):
         raise
 
 
-def update_behavioral_profile(student_id: str, p_idx: float, g_score: float, e_score: float):
+def update_behavioral_profile(
+    student_id: str, p_idx: float, g_score: float, e_score: float, h_rate: float = 0.0, err_rate: float = 0.0
+):
     """
     Updates the behavioral vector B_t^u for a student.
     """
@@ -120,7 +122,17 @@ def update_behavioral_profile(student_id: str, p_idx: float, g_score: float, e_s
 
     try:
         with engine.begin() as conn:
-            conn.execute(query, {"student_id": student_id, "p_idx": p_idx, "g_score": g_score, "e_score": e_score})
+            conn.execute(
+                query,
+                {
+                    "student_id": student_id,
+                    "p_idx": p_idx,
+                    "g_score": g_score,
+                    "e_score": e_score,
+                    "h_rate": h_rate,
+                    "err_rate": err_rate,
+                },
+            )
             logger.info(f"Updated behavioral profile for {student_id}")
     except Exception as e:
         logger.error(f"DB Error behavioral upsert: {e}")
@@ -129,7 +141,7 @@ def update_behavioral_profile(student_id: str, p_idx: float, g_score: float, e_s
 
 def get_behavioral_profile(student_id: str) -> dict:
     query = text("""
-        SELECT procrastination_index, gaming_score, engagement_score
+        SELECT procrastination_index, gaming_score, engagement_score, hint_rate, error_rate
         FROM behavioral_profiles
         WHERE student_id = :student_id
     """)
@@ -137,8 +149,20 @@ def get_behavioral_profile(student_id: str) -> dict:
         with engine.connect() as conn:
             row = conn.execute(query, {"student_id": student_id}).fetchone()
             if row:
-                return {"procrastination_index": row[0], "gaming_score": row[1], "engagement_score": row[2]}
-            return {"procrastination_index": 0.0, "gaming_score": 0.0, "engagement_score": 0.0}
+                return {
+                    "procrastination_index": row[0],
+                    "gaming_score": row[1],
+                    "engagement_score": row[2],
+                    "hint_rate": row[3],
+                    "error_rate": row[4],
+                }
+            return {
+                "procrastination_index": 0.0,
+                "gaming_score": 0.0,
+                "engagement_score": 0.0,
+                "hint_rate": 0.0,
+                "error_rate": 0.0,
+            }
     except Exception as e:
         logger.error(f"DB Error fetch behavior: {e}")
         return {}

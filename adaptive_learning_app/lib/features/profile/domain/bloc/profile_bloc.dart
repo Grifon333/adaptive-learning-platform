@@ -28,11 +28,13 @@ class ProfileBloc extends Bloc<ProfileEvent, ProfileState> {
   Future<void> _onUpdate(ProfileUpdateRequested event, Emitter<ProfileState> emit) async {
     emit(ProfileLoading());
     try {
-      final updates = {'cognitive_profile': event.cognitive, 'learning_preferences': event.preferences};
+      final updates = event.toUpdateMap();
       final profile = await _repository.updateUserProfile(updates);
       emit(ProfileLoaded(profile));
     } on Object catch (e) {
       emit(ProfileError("Update failed: $e"));
+      // Optionally reload to restore valid state
+      add(ProfileLoadRequested());
     }
   }
 }

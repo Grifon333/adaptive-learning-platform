@@ -38,3 +38,31 @@ final class AuthRegisterRequested extends AuthEvent {
   @override
   List<Object?> get props => [email];
 }
+
+final class AuthSocialLoginRequested extends AuthEvent {
+  const AuthSocialLoginRequested({
+    required this.email,
+    required this.provider,
+    required this.providerId,
+    required this.firstName,
+    required this.lastName,
+    this.avatarUrl,
+  });
+
+  final String email;
+  final String provider;
+  final String providerId;
+  final String firstName;
+  final String lastName;
+  final String? avatarUrl;
+
+  @override
+  List<Object?> get props => [email, provider, providerId];
+}
+
+final class AuthForgotPasswordRequested extends AuthEvent {
+  const AuthForgotPasswordRequested(this.email);
+  final String email;
+  @override
+  List<Object?> get props => [email];
+}
