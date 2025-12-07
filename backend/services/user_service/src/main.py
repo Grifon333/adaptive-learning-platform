@@ -70,6 +70,9 @@ def send_verification_email(email: str, token: str):
     logger.info(f"[Background Task] Sending verification email to {email}. Link: /verify?token={token}")
 
 
+# --- Authorization ---
+
+
 @app.post("/api/v1/auth/register", status_code=status.HTTP_201_CREATED)
 def register_user(user: schemas.UserCreate, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     # 1. Check existing
@@ -100,92 +103,6 @@ def register_user(user: schemas.UserCreate, background_tasks: BackgroundTasks, d
     background_tasks.add_task(send_verification_email, new_user.email, verification_token)
 
     return {"message": "User registered. Please check your email to verify account."}
-
-
-@app.post("/api/v1/auth/verify-email")
-def verify_email(req: schemas.EmailVerificationRequest, db: Session = Depends(get_db)):
-    email = security.decode_token(req.token, "verification")
-    if not email:
-        raise HTTPException(status_code=400, detail="Invalid or expired token")
-
-    user = db.query(models.User).filter(models.User.email == email).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    if user.is_verified:
-        return {"message": "Email already verified"}
-
-    user.is_verified = True
-    db.commit()
-    return {"message": "Email verified successfully"}
-
-
-@app.post("/api/v1/auth/social-login", response_model=schemas.Token)
-def social_login(login_data: schemas.UserSocialLogin, db: Session = Depends(get_db)):
-    """
-    Handles login/registration from Social Providers.
-    Assumes Frontend has already verified validity with Provider and sends clean data.
-    """
-    user = db.query(models.User).filter(models.User.email == login_data.email).first()
-
-    if not user:
-        # Register on the fly
-        user = models.User(
-            email=login_data.email,
-            first_name=login_data.first_name,
-            last_name=login_data.last_name,
-            provider=login_data.provider,
-            provider_id=login_data.provider_id,
-            is_verified=True,  # Social accounts are implicitly verified
-            role=models.UserRole.student,
-            avatar_url=login_data.avatar_url,
-        )
-        db.add(user)
-        db.flush()
-        db.add(models.StudentProfile(user_id=user.id))
-        db.commit()
-        db.refresh(user)
-        logger.info(f"New Social User Registered: {user.email}")
-    else:
-        # Link provider if not linked (Optional logic)
-        if not user.provider:
-            user.provider = login_data.provider
-            user.provider_id = login_data.provider_id
-            db.commit()
-
-    # Generate Session
-    subject = {"sub": str(user.id)}
-    return {
-        "access_token": security.create_access_token(subject),
-        "refresh_token": security.create_refresh_token(subject),
-        "token_type": "bearer",
-    }
-
-
-@app.post("/api/v1/auth/forgot-password")
-def forgot_password(req: schemas.PasswordResetRequest, db: Session = Depends(get_db)):
-    user = db.query(models.User).filter(models.User.email == req.email).first()
-    if user:
-        # Security: Don't reveal if user exists or not, but log internally
-        token = security.create_password_reset_token(user.email)
-        logger.info(f"[EVENT: email_send] Password Reset for {user.email}: {token}")
-
-    return {"message": "If the email exists, a reset link has been sent."}
-
-
-@app.post("/api/v1/auth/reset-password")
-def reset_password(req: schemas.PasswordResetConfirm, db: Session = Depends(get_db)):
-    email = security.decode_token(req.token, "reset")
-    if not email:
-        raise HTTPException(status_code=400, detail="Invalid or expired token")
-
-    user = db.query(models.User).filter(models.User.email == email).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    user.password_hash = security.get_password_hash(req.new_password)
-    db.commit()
-    return {"message": "Password updated successfully"}
 
 
 @app.post("/api/v1/auth/login", response_model=schemas.Token)
@@ -241,6 +158,136 @@ def login_for_access_token(
         "refresh_token": refresh_token,
         "token_type": "bearer",
     }
+
+
+@app.post("/api/v1/auth/social-login", response_model=schemas.Token)
+def social_login(login_data: schemas.UserSocialLogin, db: Session = Depends(get_db)):
+    """
+    Handles login/registration from Social Providers.
+    Assumes Frontend has already verified validity with Provider and sends clean data.
+    """
+    user = db.query(models.User).filter(models.User.email == login_data.email).first()
+
+    if not user:
+        # Register on the fly
+        user = models.User(
+            email=login_data.email,
+            first_name=login_data.first_name,
+            last_name=login_data.last_name,
+            provider=login_data.provider,
+            provider_id=login_data.provider_id,
+            is_verified=True,  # Social accounts are implicitly verified
+            role=models.UserRole.student,
+            avatar_url=login_data.avatar_url,
+        )
+        db.add(user)
+        db.flush()
+        db.add(models.StudentProfile(user_id=user.id))
+        db.commit()
+        db.refresh(user)
+        logger.info(f"New Social User Registered: {user.email}")
+    else:
+        # Link provider if not linked (Optional logic)
+        if not user.provider:
+            user.provider = login_data.provider
+            user.provider_id = login_data.provider_id
+            db.commit()
+
+    # Generate Session
+    subject = {"sub": str(user.id)}
+    return {
+        "access_token": security.create_access_token(subject),
+        "refresh_token": security.create_refresh_token(subject),
+        "token_type": "bearer",
+    }
+
+
+@app.post("/api/v1/auth/refresh", response_model=schemas.Token)
+def refresh_access_token(refresh_request: schemas.TokenRefresh, db: Session = Depends(get_db)):
+    """
+    Update the Access Token, using the Refresh Token
+    """
+    token_data = security.decode_access_token(refresh_request.refresh_token)
+    if token_data is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid refresh token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    if token_data.token_type != "refresh":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token type, expected 'refresh'",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # Check user existing
+    user = db.query(models.User).filter(models.User.id == token_data.user_id).first()
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid refresh token signature or user not found",
+        )
+
+    # Generate a new pair of tokens
+    subject_data = {"sub": str(user.id)}
+    new_access_token = security.create_access_token(data=subject_data)
+    new_refresh_token = security.create_refresh_token(data=subject_data)
+
+    logger.info(f"Token refreshed for user: {user.email}")
+    return {
+        "access_token": new_access_token,
+        "refresh_token": new_refresh_token,
+        "token_type": "bearer",
+    }
+
+
+@app.post("/api/v1/auth/verify-email")
+def verify_email(req: schemas.EmailVerificationRequest, db: Session = Depends(get_db)):
+    email = security.decode_token(req.token, "verification")
+    if not email:
+        raise HTTPException(status_code=400, detail="Invalid or expired token")
+
+    user = db.query(models.User).filter(models.User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if user.is_verified:
+        return {"message": "Email already verified"}
+
+    user.is_verified = True
+    db.commit()
+    return {"message": "Email verified successfully"}
+
+
+@app.post("/api/v1/auth/forgot-password")
+def forgot_password(req: schemas.PasswordResetRequest, db: Session = Depends(get_db)):
+    user = db.query(models.User).filter(models.User.email == req.email).first()
+    if user:
+        # Security: Don't reveal if user exists or not, but log internally
+        token = security.create_password_reset_token(user.email)
+        logger.info(f"[EVENT: email_send] Password Reset for {user.email}: {token}")
+
+    return {"message": "If the email exists, a reset link has been sent."}
+
+
+@app.post("/api/v1/auth/reset-password")
+def reset_password(req: schemas.PasswordResetConfirm, db: Session = Depends(get_db)):
+    email = security.decode_token(req.token, "reset")
+    if not email:
+        raise HTTPException(status_code=400, detail="Invalid or expired token")
+
+    user = db.query(models.User).filter(models.User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    user.password_hash = security.get_password_hash(req.new_password)
+    db.commit()
+    return {"message": "Password updated successfully"}
+
+
+# --- User Profile ---
 
 
 @app.get("/api/v1/users/me/profile", response_model=schemas.FullUserProfile)
@@ -360,11 +407,10 @@ def update_user_profile(
     )
 
 
-@app.post(
-    "/api/v1/learning-paths",
-    response_model=schemas.LearningPath,
-    status_code=status.HTTP_201_CREATED,
-)
+# --- Learning Path ---
+
+
+@app.post("/api/v1/learning-paths", response_model=schemas.LearningPath, status_code=status.HTTP_201_CREATED)
 def create_learning_path(
     path_data: schemas.LearningPathCreate,
     current_user: models.User = Depends(get_current_user),
@@ -447,51 +493,7 @@ def create_learning_path(
         ) from e
 
 
-@app.post("api/v1/auth/refresh", response_model=schemas.Token)
-def refresh_access_token(refresh_request: schemas.TokenRefresh, db: Session = Depends(get_db)):
-    """
-    Update the Access Token, using the Refresh Token
-    """
-    token_data = security.decode_access_token(refresh_request.refresh_token)
-    if token_data is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid refresh token",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    if token_data.token_type != "refresh":
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token type, expected 'refresh'",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    # Check user existing
-    user = db.query(models.User).filter(models.User.id == token_data.user_id).first()
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid refresh token signature or user not found",
-        )
-
-    # Generate a new pair of tokens
-    subject_data = {"sub": str(user.id)}
-    new_access_token = security.create_access_token(data=subject_data)
-    new_refresh_token = security.create_refresh_token(data=subject_data)
-
-    logger.info(f"Token refreshed for user: {user.email}")
-    return {
-        "access_token": new_access_token,
-        "refresh_token": new_refresh_token,
-        "token_type": "bearer",
-    }
-
-
-@app.get(
-    "/api/v1/students/{student_id}/learning-paths",
-    response_model=list[schemas.LearningPath],
-)
+@app.get("/api/v1/students/{student_id}/learning-paths", response_model=list[schemas.LearningPath])
 def get_student_paths(
     student_id: str,  # UUID str
     db: Session = Depends(get_db),
@@ -513,10 +515,19 @@ def get_student_paths(
     return paths
 
 
-@app.patch(
-    "/api/v1/learning-paths/steps/{step_id}/progress",
-    status_code=status.HTTP_204_NO_CONTENT,
-)
+@app.get("/api/v1/learning-paths/steps/{step_id}", response_model=schemas.LearningStep)
+def get_learning_step(
+    step_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    step = db.query(models.LearningStep).filter(models.LearningStep.id == step_id).first()
+    if not step:
+        raise HTTPException(status_code=404, detail="Step not found")
+    return step
+
+
+@app.patch("/api/v1/learning-paths/steps/{step_id}/progress", status_code=status.HTTP_204_NO_CONTENT)
 def update_step_progress(
     step_id: uuid.UUID,
     update_data: schemas.StepProgressUpdate,
@@ -562,10 +573,7 @@ def update_step_progress(
     return None
 
 
-@app.post(
-    "/api/v1/learning-paths/steps/{step_id}/complete",
-    response_model=schemas.StepCompleteResponse,
-)
+@app.post("/api/v1/learning-paths/steps/{step_id}/complete", response_model=schemas.StepCompleteResponse)
 def complete_step(
     step_id: uuid.UUID,
     current_user: models.User = Depends(get_current_user),
@@ -632,10 +640,7 @@ def complete_step(
     )
 
 
-@app.post(
-    "/api/v1/learning-paths/steps/{step_id}/quiz-result",
-    response_model=schemas.StepCompleteResponse,
-)
+@app.post("/api/v1/learning-paths/steps/{step_id}/quiz-result", response_model=schemas.StepCompleteResponse)
 def update_step_quiz_result(
     step_id: uuid.UUID,
     result: schemas.StepQuizUpdate,
@@ -700,9 +705,7 @@ def update_step_quiz_result(
 
 
 @app.post(
-    "/api/v1/learning-paths/{path_id}/adapt",
-    response_model=schemas.AdaptationResponse,
-    status_code=status.HTTP_200_OK,
+    "/api/v1/learning-paths/{path_id}/adapt", response_model=schemas.AdaptationResponse, status_code=status.HTTP_200_OK
 )
 def adapt_learning_path(
     path_id: uuid.UUID,
@@ -777,15 +780,3 @@ def adapt_learning_path(
         db.rollback()
         logger.error(f"Failed to adapt path: {e}")
         raise HTTPException(status_code=500, detail="Adaptation failed") from e
-
-
-@app.get("/api/v1/learning-paths/steps/{step_id}", response_model=schemas.LearningStep)
-def get_learning_step(
-    step_id: uuid.UUID,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
-):
-    step = db.query(models.LearningStep).filter(models.LearningStep.id == step_id).first()
-    if not step:
-        raise HTTPException(status_code=404, detail="Step not found")
-    return step

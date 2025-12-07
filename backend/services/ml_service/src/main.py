@@ -118,9 +118,6 @@ def get_student_behavior(student_id: str):
     return {"student_id": student_id, "profile": profile}
 
 
-# --- RL Endpoints ---
-
-
 @app.post("/api/v1/rl/recommend", response_model=schemas.RLRecommendationResponse)
 async def get_rl_recommendation(request: schemas.RLRecommendationRequest):
     """
