@@ -99,8 +99,8 @@ def register_user(user: schemas.UserCreate, background_tasks: BackgroundTasks, d
     db.refresh(new_user)
 
     # 4. Trigger Email Verification
-    verification_token = security.create_verification_token(new_user.email)
-    background_tasks.add_task(send_verification_email, new_user.email, verification_token)
+    verification_token = security.create_verification_token(str(new_user.email))
+    background_tasks.add_task(send_verification_email, str(new_user.email), verification_token)
 
     return {"message": "User registered. Please check your email to verify account."}
 
@@ -189,8 +189,8 @@ def social_login(login_data: schemas.UserSocialLogin, db: Session = Depends(get_
     else:
         # Link provider if not linked (Optional logic)
         if not user.provider:
-            user.provider = login_data.provider
-            user.provider_id = login_data.provider_id
+            user.provider = login_data.provider  # type: ignore[assignment]
+            user.provider_id = login_data.provider_id  # type: ignore[assignment]
             db.commit()
 
     # Generate Session
@@ -256,7 +256,7 @@ def verify_email(req: schemas.EmailVerificationRequest, db: Session = Depends(ge
     if user.is_verified:
         return {"message": "Email already verified"}
 
-    user.is_verified = True
+    user.is_verified = True  # type: ignore[assignment]
     db.commit()
     return {"message": "Email verified successfully"}
 
@@ -266,7 +266,7 @@ def forgot_password(req: schemas.PasswordResetRequest, db: Session = Depends(get
     user = db.query(models.User).filter(models.User.email == req.email).first()
     if user:
         # Security: Don't reveal if user exists or not, but log internally
-        token = security.create_password_reset_token(user.email)
+        token = security.create_password_reset_token(cast(str, user.email))
         logger.info(f"[EVENT: email_send] Password Reset for {user.email}: {token}")
 
     return {"message": "If the email exists, a reset link has been sent."}
@@ -319,11 +319,11 @@ def get_user_profile(current_user: models.User = Depends(get_current_user), db: 
 
     if profile is None:
         return schemas.FullUserProfile(
-            id=current_user.id,
+            id=cast(uuid.UUID, current_user.id),
             email=cast(str, current_user.email),
             first_name=cast(str, current_user.first_name),
             last_name=cast(str, current_user.last_name),
-            avatar_url=current_user.avatar_url,
+            avatar_url=cast(str | None, current_user.avatar_url),
             role=str(current_user.role),
             cognitive_profile={},
             learning_preferences={},
@@ -336,11 +336,11 @@ def get_user_profile(current_user: models.User = Depends(get_current_user), db: 
     # Manual mapping to flatten the structure for the schema
     return schemas.FullUserProfile(
         # Identity
-        id=current_user.id,
+        id=cast(uuid.UUID, current_user.id),
         email=cast(str, current_user.email),
         first_name=cast(str, current_user.first_name),
         last_name=cast(str, current_user.last_name),
-        avatar_url=current_user.avatar_url,
+        avatar_url=cast(str | None, current_user.avatar_url),
         role=str(current_user.role),
         # Profile Data (psi_u)
         cognitive_profile=profile.cognitive_profile or {},
@@ -367,11 +367,11 @@ def update_user_profile(
 
     # 1. Update Identity Fields (User Table)
     if profile_data.first_name:
-        current_user.first_name = profile_data.first_name
+        current_user.first_name = profile_data.first_name  # type: ignore[assignment]
     if profile_data.last_name:
-        current_user.last_name = profile_data.last_name
+        current_user.last_name = profile_data.last_name  # type: ignore[assignment]
     if profile_data.avatar_url:
-        current_user.avatar_url = profile_data.avatar_url
+        current_user.avatar_url = profile_data.avatar_url  # type: ignore[assignment]
 
     # 2. Update Profile Fields (StudentProfile Table)
     if profile_data.learning_preferences is not None:
@@ -392,11 +392,11 @@ def update_user_profile(
 
     # Return updated structure
     return schemas.FullUserProfile(
-        id=current_user.id,
+        id=cast(uuid.UUID, current_user.id),
         email=cast(str, current_user.email),
         first_name=cast(str, current_user.first_name),
         last_name=cast(str, current_user.last_name),
-        avatar_url=current_user.avatar_url,
+        avatar_url=cast(str | None, current_user.avatar_url),
         role=str(current_user.role),
         cognitive_profile=current_user.profile.cognitive_profile or {},
         learning_preferences=current_user.profile.learning_preferences or {},
