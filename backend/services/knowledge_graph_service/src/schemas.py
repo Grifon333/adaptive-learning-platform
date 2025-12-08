@@ -145,3 +145,13 @@ class PathCandidate(BaseModel):
 
 class MultiPathResponse(BaseModel):
     candidates: list[PathCandidate]
+
+
+class AdaptiveQuestionRequest(BaseModel):
+    concept_ids: list[str]
+    target_difficulty: float
+    exclude_question_ids: list[str] = []
+
+
+class AdaptiveQuestionResponse(Question):
+    concept_id: str

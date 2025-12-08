@@ -9,6 +9,7 @@ from .database import (
     update_behavioral_profile,
     update_knowledge_state_batch,
 )
+from .services.irt_engine import irt_engine
 from .services.rl_engine import rl_engine
 
 app = FastAPI(title="ML Service API")
@@ -158,6 +159,29 @@ async def process_rl_reward(request: schemas.RLRewardRequest):
     except Exception as e:
         logger.error(f"RL Feedback Error: {e}")
         raise HTTPException(status_code=500, detail="Failed to process feedback") from e
+
+
+@app.post("/api/v1/irt/evaluate", response_model=schemas.IRTResponse)
+def evaluate_adaptive_step(req: schemas.IRTRequest):
+    """
+    Calculates current ability and determines next step.
+    """
+    # 1. Estimate Theta
+    theta = irt_engine.estimate_ability(req.history)
+
+    # 2. Calculate next target
+    next_diff = irt_engine.get_next_target_difficulty(theta)
+
+    # 3. Check Stop Condition (Simple Rule-based for MVP)
+    # Real implementations check Standard Error (SE) < threshold
+    should_stop = len(req.history) >= 15
+
+    return {
+        "estimated_theta": theta,
+        "next_difficulty_target": next_diff,
+        "current_mastery": irt_engine.calculate_mastery(theta),
+        "stop_test": should_stop,
+    }
 
 
 @app.get("/health")

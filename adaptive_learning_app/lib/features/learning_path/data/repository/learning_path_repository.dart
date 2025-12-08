@@ -1,6 +1,6 @@
 import 'package:adaptive_learning_app/app/app_config/app_config.dart';
 import 'package:adaptive_learning_app/app/http/i_http_client.dart';
-import 'package:adaptive_learning_app/features/learning_path/data/dto/assessment_dtos.dart';
+import 'package:adaptive_learning_app/features/learning_path/data/dto/adaptive_assessment_dtos.dart';
 import 'package:adaptive_learning_app/features/learning_path/data/dto/concept_dto.dart';
 import 'package:adaptive_learning_app/features/learning_path/data/dto/learning_path_dtos.dart';
 import 'package:adaptive_learning_app/features/learning_path/data/dto/quiz_dtos.dart';
@@ -62,23 +62,6 @@ final class LearningPathRepository implements ILearningPathRepository {
   }
 
   @override
-  Future<AssessmentSessionDto> startAssessment({required String studentId, required String goalConceptId}) async {
-    final serviceUrl = appConfig.learningPathServiceUrl;
-    final response = await httpClient.post(
-      '$serviceUrl/assessments/start',
-      data: {'student_id': studentId, 'goal_concept_id': goalConceptId},
-    );
-    return AssessmentSessionDto.fromJson(response.data);
-  }
-
-  @override
-  Future<LearningPathDto> submitAssessment(AssessmentSubmissionDto submission) async {
-    final serviceUrl = appConfig.learningPathServiceUrl;
-    final response = await httpClient.post('$serviceUrl/assessments/submit', data: submission.toJson());
-    return LearningPathDto.fromJson(response.data);
-  }
-
-  @override
   Future<List<ConceptDto>> getConcepts() async {
     final serviceUrl = appConfig.knowledgeGraphServiceUrl;
 
@@ -112,5 +95,30 @@ final class LearningPathRepository implements ILearningPathRepository {
     final serviceUrl = appConfig.learningPathServiceUrl;
     final response = await httpClient.post('$serviceUrl/steps/quiz/submit', data: submission.toJson());
     return StepQuizResultDto.fromJson(response.data);
+  }
+
+  @override
+  Future<AdaptiveAssessmentResponseDto> startAdaptiveAssessment({
+    required String studentId,
+    required String goalConceptId,
+  }) async {
+    final serviceUrl = appConfig.learningPathServiceUrl;
+    final response = await httpClient.post(
+      '$serviceUrl/assessments/adaptive/start',
+      data: {'student_id': studentId, 'goal_concept_id': goalConceptId},
+    );
+    return AdaptiveAssessmentResponseDto.fromJson(response.data);
+  }
+
+  @override
+  Future<AdaptiveAssessmentResponseDto> submitAdaptiveAnswer({
+    required AdaptiveSessionStateDto sessionState,
+    required int answerIndex,
+  }) async {
+    final serviceUrl = appConfig.learningPathServiceUrl;
+    // Payload: Entire session object + answer index
+    final payload = {'session_state': sessionState.toJson(), 'answer_index': answerIndex};
+    final response = await httpClient.post('$serviceUrl/assessments/adaptive/submit', data: payload);
+    return AdaptiveAssessmentResponseDto.fromJson(response.data);
   }
 }

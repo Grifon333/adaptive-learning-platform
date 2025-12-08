@@ -172,3 +172,24 @@ class StudentProfile(BaseModel):
     privacy_settings: dict[str, Any] = {}
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class AdaptiveSessionState(BaseModel):
+    student_id: UUID
+    goal_concept_id: str
+    history: list[dict[str, Any]] = []  # List of {question_id, difficulty, correct}
+    start_time: str
+    current_question: AssessmentQuestion | None = None
+
+
+class AdaptiveSubmitRequest(BaseModel):
+    session_state: AdaptiveSessionState
+    answer_index: int
+
+
+class AdaptiveResponse(BaseModel):
+    session_state: AdaptiveSessionState
+    completed: bool = False
+    final_mastery: float | None = None
+    message: str | None = None
+    created_learning_path: LearningPathResponse | None = None

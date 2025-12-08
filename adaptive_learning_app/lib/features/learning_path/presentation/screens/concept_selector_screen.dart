@@ -128,11 +128,9 @@ class _ConceptSelectorScreenState extends State<ConceptSelectorScreen> {
                           );
 
                           if (result == true) {
-                            if (context.mounted) {
-                              context.pushNamed('assessment', extra: goalId);
-                            }
+                            if (context.mounted) context.pushNamed('adaptive_assessment', extra: goalId);
                           } else {
-                            // Standard generation (Previous logic)
+                            // Standard generation
                             final authState = context.read<AuthBloc>().state;
                             final studentId = (authState is AuthAuthenticated) ? authState.userId : '';
                             if (studentId.isEmpty) return;
