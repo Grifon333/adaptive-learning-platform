@@ -72,3 +72,14 @@ class RLRewardRequest(BaseModel):
     prev_state_vector: list[float] | None = None  # Optional for stateless update
     action_concept_id: str
     reward_components: dict[str, float]  # mastery_delta, behavior_delta, etc.
+
+
+class IRTRequest(BaseModel):
+    history: list[dict[str, Any]]  # [{"difficulty": float, "correct": bool}]
+
+
+class IRTResponse(BaseModel):
+    estimated_theta: float
+    next_difficulty_target: float
+    current_mastery: float
+    stop_test: bool = False

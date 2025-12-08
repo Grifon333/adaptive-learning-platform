@@ -11,7 +11,7 @@ import 'package:adaptive_learning_app/features/events/service/tracking_service.d
 import 'package:adaptive_learning_app/features/events/tracking_route_observer.dart';
 import 'package:adaptive_learning_app/features/learning_path/data/dto/learning_path_dtos.dart';
 import 'package:adaptive_learning_app/features/learning_path/domain/lesson_bloc/lesson_bloc.dart';
-import 'package:adaptive_learning_app/features/learning_path/presentation/screens/assessment_screen.dart';
+import 'package:adaptive_learning_app/features/learning_path/presentation/screens/adaptive_assessment_screen.dart';
 import 'package:adaptive_learning_app/features/learning_path/presentation/screens/concept_selector_screen.dart';
 import 'package:adaptive_learning_app/features/learning_path/presentation/screens/create_path_mode_screen.dart';
 import 'package:adaptive_learning_app/features/learning_path/presentation/screens/learning_path_screen.dart';
@@ -136,17 +136,16 @@ class AppRouter {
             return QuizScreen(stepId: args['stepId']!, conceptId: args['conceptId']!);
           },
         ),
-
+        GoRoute(path: '/admin-graph', name: 'admin_graph', builder: (context, state) => const AdminGraphScreen()),
         GoRoute(
-          path: '/assessment',
-          name: 'assessment',
+          path: '/adaptive-assessment',
+          name: 'adaptive_assessment',
           builder: (context, state) {
+            // We pass the goalConceptId as the 'extra' argument
             final goalId = state.extra as String;
-            return AssessmentScreen(goalConceptId: goalId);
+            return AdaptiveAssessmentScreen(goalConceptId: goalId);
           },
         ),
-
-        GoRoute(path: '/admin-graph', name: 'admin_graph', builder: (context, state) => const AdminGraphScreen()),
       ],
     );
   }

@@ -487,7 +487,7 @@ async def submit_step_quiz(
     await _send_rl_feedback(
         client, student_id, submission.concept_id, base_result.score, base_result.passed, prev_mastery
     )
-    adaptation_occurred, final_message = await _trigger_adaptation_logic(client, authorization, submission, base_result)
+    final_message, adaptation_occurred = await _trigger_adaptation_logic(client, authorization, submission, base_result)
 
     return schemas.StepQuizResult(
         passed=base_result.passed,
@@ -578,6 +578,25 @@ async def submit_assessment(
 
     logger.success(f"Assessment complete. Generated path with {len(us_steps)} steps.")
     return final_path
+
+
+@app.post("/api/v1/assessments/adaptive/start", response_model=schemas.AdaptiveResponse)
+async def start_adaptive_test(
+    req: schemas.AssessmentStartRequest, client: httpx.AsyncClient = Depends(get_http_client)
+):
+    return await assessment_service.start_adaptive_assessment(client, str(req.student_id), req.goal_concept_id)
+
+
+@app.post("/api/v1/assessments/adaptive/submit", response_model=schemas.AdaptiveResponse)
+async def submit_adaptive_answer(
+    req: schemas.AdaptiveSubmitRequest,
+    authorization: str | None = Header(None),
+    client: httpx.AsyncClient = Depends(get_http_client),
+):
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    return await assessment_service.submit_adaptive_answer(client, req, authorization)
 
 
 @app.get("/health")

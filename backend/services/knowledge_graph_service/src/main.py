@@ -586,6 +586,48 @@ async def get_questions_batch(req: schemas.BatchQuestionsRequest, db: AsyncSessi
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
+@app.post("/api/v1/questions/adaptive", response_model=schemas.AdaptiveQuestionResponse | None)
+async def get_adaptive_question(req: schemas.AdaptiveQuestionRequest, db: AsyncSession = Depends(get_db_session)):
+    """
+    Finds a single question closest to the target difficulty.
+    Returns the question AND its concept_id.
+    """
+    query = (
+        "MATCH (c:Concept)-[:HAS_QUESTION]->(q:Question) "
+        "WHERE c.id IN $concept_ids "
+        "AND NOT q.id IN $exclude_ids "
+        "WITH q, c, abs(q.difficulty - $target) as diff_delta "
+        "ORDER BY diff_delta ASC "
+        "LIMIT 1 "
+        "RETURN q, c.id as concept_id"
+    )
+
+    params = {"concept_ids": req.concept_ids, "exclude_ids": req.exclude_question_ids, "target": req.target_difficulty}
+
+    try:
+        result = await db.run(query, params)
+        record = await result.single()
+
+        if not record:
+            return None
+
+        q_data = dict(record["q"])
+
+        # Handle JSON options if stored as string in Neo4j
+        if isinstance(q_data.get("options"), str):
+            q_data["options"] = json.loads(q_data["options"])
+
+        # 2. Inject concept_id from the graph relationship
+        q_data["concept_id"] = record["concept_id"]
+
+        # 3. Return using the NEW schema
+        return schemas.AdaptiveQuestionResponse(**q_data)
+
+    except Exception as e:
+        logger.error(f"Adaptive Q fetch error: {e}")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
 @app.get("/health")
 def health_check():
     return {"status": "ok", "service": "Knowledge Graph Service"}
