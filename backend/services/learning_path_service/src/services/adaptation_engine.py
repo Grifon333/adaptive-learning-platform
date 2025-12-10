@@ -156,6 +156,8 @@ class AdaptationEngine:
         elif attention_score > 0.8:
             time_modifier = 0.9
 
+        remedial_exist = False
+
         for concept in raw_path:
             mastery_level = mastery_map.get(concept.id, 0.0)
 
@@ -179,7 +181,7 @@ class AdaptationEngine:
             # Strategy 3: Remedial Support (Simplified)
             # In a full flow, we might call select_optimal_path_concept here to pick *which* remedial to use
             # if there are multiple options from KG.
-            if 0.0 < mastery_level < 0.6:
+            if 0.0 < mastery_level < 0.6 and not remedial_exist:
                 remedial_step = self._create_step(
                     concept,
                     current_step_num,
@@ -192,6 +194,7 @@ class AdaptationEngine:
                 )
                 us_steps.append(remedial_step)
                 total_time += remedial_step.estimated_time
+                remedial_exist = True
 
             # Standard Learning Step
             step = self._create_step(

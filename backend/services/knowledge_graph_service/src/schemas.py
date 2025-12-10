@@ -1,3 +1,5 @@
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 # --- Resource Schemas ---
@@ -155,3 +157,20 @@ class AdaptiveQuestionRequest(BaseModel):
 
 class AdaptiveQuestionResponse(Question):
     concept_id: str
+
+
+class OptimalPathRequest(BaseModel):
+    start_concept_id: str | None = None
+    goal_concept_id: str
+    # Map of concept_id -> mastery_level (0.0 to 1.0)
+    student_knowledge: dict[str, float] = {}
+    # Learning preferences: {"visual": 0.8, "text": 0.2, ...}
+    learning_preferences: dict[str, Any] = {}
+    # Weight for difficulty mismatch penalty (alpha in math model)
+    difficulty_penalty: float = 2.0
+
+
+class OptimalPathResponse(BaseModel):
+    path: list[Concept]
+    total_estimated_time: int
+    total_complexity: float
