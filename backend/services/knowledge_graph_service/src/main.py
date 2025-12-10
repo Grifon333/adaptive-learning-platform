@@ -13,6 +13,7 @@ from neo4j import AsyncSession
 from . import schemas
 from .database import close_driver, get_db_session, init_driver
 from .logger import setup_logging
+from .services.pathfinder import Pathfinder
 
 
 @asynccontextmanager
@@ -625,6 +626,32 @@ async def get_adaptive_question(req: schemas.AdaptiveQuestionRequest, db: AsyncS
 
     except Exception as e:
         logger.error(f"Adaptive Q fetch error: {e}")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@app.post("/api/v1/path/optimal", response_model=schemas.OptimalPathResponse)
+async def generate_optimal_path(req: schemas.OptimalPathRequest, db: AsyncSession = Depends(get_db_session)):
+    """
+    Generates a personalized learning path using A* algorithm.
+    Takes into account student knowledge state and learning preferences.
+    """
+    pathfinder = Pathfinder(db)
+    try:
+        path_nodes, time, complexity = await pathfinder.find_optimal_path(
+            req.start_concept_id, req.goal_concept_id, req.student_knowledge, req.learning_preferences
+        )
+
+        # Convert dicts back to Pydantic models for response
+        concepts = []
+        for node in path_nodes:
+            # Ensure resources are modeled correctly
+            raw_resources = node.pop("resources", [])
+            res_objs = [schemas.Resource(**r) for r in raw_resources]
+            concepts.append(schemas.Concept(**node, resources=res_objs))
+
+        return schemas.OptimalPathResponse(path=concepts, total_estimated_time=time, total_complexity=complexity)
+    except Exception as e:
+        logger.error(f"Optimization failed: {e}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 

@@ -299,54 +299,78 @@ async def create_learning_path(
     authorization: str | None = Header(None),
     client: httpx.AsyncClient = Depends(get_http_client),
 ):
-    logger.info(f"Received path request for student {student_id}...")
+    logger.info(f"Generating OPTIMAL path for student {student_id}...")
     str_student_id = str(student_id)
-
     if authorization is None:
         raise HTTPException(status_code=401, detail="Authorization header missing")
 
-    # 1. Get Raw Path Candidates from KGS
-    try:
-        candidates = await _fetch_kg_candidates(client, request.goal_concept_id, request.start_concept_id)
-    except Exception as e:
-        logger.error(f"KGS candidates fetch failed: {e}")
-        raise HTTPException(status_code=404, detail="No path found") from e
-
-    if not candidates:
-        raise HTTPException(status_code=404, detail="No viable path found")
-
-    # 2. Fetch Profile (for RL)
+    # 1. Fetch Student Profile (User Service)
+    # We need cognitive profile and learning preferences
     profile = await _get_student_profile(client, str_student_id, authorization)
+    if not profile:
+        raise HTTPException(status_code=404, detail="Student profile not found")
 
-    # 3. SELECT BEST PATH via RL
-    # We ask RL agent to pick the best candidate based on the full profile
-    best_path_concepts = await adaptation_engine.select_optimal_path(client, str_student_id, candidates, profile)
+    # 2. Fetch Current Knowledge State (ML Service)
+    # We need the full mastery map to calculate costs in A*
+    try:
+        ml_url = f"{config.settings.ML_SERVICE_URL}/api/v1/students/{str_student_id}/mastery"
+        ml_resp = await client.get(ml_url)
+        ml_resp.raise_for_status()
+        mastery_map = ml_resp.json().get("mastery_map", {})
+    except Exception as e:
+        logger.warning(f"Failed to fetch mastery, assuming empty: {e}")
+        mastery_map = {}
 
-    # 4. Batch Fetch Mastery (for adaptation)
-    unique_ids = list(set([c.id for c in best_path_concepts]))
-    mastery_map = await _get_mastery_batch(client, str_student_id, unique_ids)
+    # 3. Call KGS for A* Optimization
+    kg_url = f"{config.settings.KG_SERVICE_URL}/api/v1/path/optimal"
 
-    # 5. Linearize and Adapt
-    us_steps, total_time = adaptation_engine.generate_adaptive_steps(best_path_concepts, mastery_map, profile)
+    # We assume if start_id is missing, KGS handles it or we pick a default 'root'
+    # For MVP, we pass whatever the user sent
+    payload = {
+        "start_concept_id": request.start_concept_id,
+        "goal_concept_id": request.goal_concept_id,
+        "student_knowledge": mastery_map,
+        "learning_preferences": profile.learning_preferences,
+        "difficulty_penalty": 1.5,  # Configurable alpha
+    }
 
-    # 6. Save to User Service
+    try:
+        kg_resp = await client.post(kg_url, json=payload)
+        kg_resp.raise_for_status()
+        optimal_data = kg_resp.json()
+        path_concepts = [schemas.KGSConcept(**c) for c in optimal_data["path"]]
+        # total_time = optimal_data["total_estimated_time"]
+    except Exception as e:
+        logger.error(f"KGS Optimization failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to generate optimal path") from e
+
+    # 4. Transform to User Service Schema (Final Steps)
+    # The path returned by KGS is already filtered for resources
+    us_steps, total_time = adaptation_engine.generate_adaptive_steps(path_concepts, mastery_map, profile)
+
+    # us_steps = []
+    # for i, concept in enumerate(path_concepts):
+    #     step_resources = [r.model_dump() for r in concept.resources]
+
+    #     step = schemas.USLearningStepCreate(
+    #         step_number=i + 1,
+    #         concept_id=concept.id,
+    #         resources=step_resources,
+    #         estimated_time=concept.estimated_time,
+    #         difficulty=concept.difficulty,
+    #         status="pending",
+    #         description=concept.description,
+    #     )
+    #     us_steps.append(step)
+
+    # 5. Save to User Service
     us_path_data = schemas.USLearningPathCreate(
         goal_concepts=[request.goal_concept_id],
         steps=us_steps,
         estimated_time=total_time,
     )
 
-    us_url = f"{config.settings.USER_SERVICE_URL}/api/v1/learning-paths"
-    try:
-        us_response = await client.post(
-            us_url,
-            json=us_path_data.model_dump(),
-            headers={"Authorization": authorization},
-        )
-        us_response.raise_for_status()
-        return us_response.json()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail="Failed to save path") from e
+    return await _save_path_to_user_service(client, us_path_data, {"Authorization": authorization})
 
 
 @app.get("/api/v1/students/{student_id}/learning-paths", response_model=list[schemas.LearningPathResponse])
