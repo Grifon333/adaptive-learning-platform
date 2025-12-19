@@ -5,10 +5,12 @@ import 'package:adaptive_learning_app/features/admin_graph/presentation/screens/
 import 'package:adaptive_learning_app/features/auth/domain/bloc/auth_bloc.dart';
 import 'package:adaptive_learning_app/features/auth/presentation/screens/login_screen.dart';
 import 'package:adaptive_learning_app/features/auth/presentation/screens/register_screen.dart';
+import 'package:adaptive_learning_app/features/dashboard/domain/bloc/dashboard_bloc.dart';
 import 'package:adaptive_learning_app/features/dashboard/presentation/screens/dashboard_screen.dart';
 import 'package:adaptive_learning_app/features/debug/i_debug_service.dart';
 import 'package:adaptive_learning_app/features/events/service/tracking_service.dart';
 import 'package:adaptive_learning_app/features/events/tracking_route_observer.dart';
+import 'package:adaptive_learning_app/features/gamification/presentation/achievements_screen.dart';
 import 'package:adaptive_learning_app/features/learning_path/data/dto/learning_path_dtos.dart';
 import 'package:adaptive_learning_app/features/learning_path/domain/lesson_bloc/lesson_bloc.dart';
 import 'package:adaptive_learning_app/features/learning_path/presentation/screens/adaptive_assessment_screen.dart';
@@ -144,6 +146,16 @@ class AppRouter {
             // We pass the goalConceptId as the 'extra' argument
             final goalId = state.extra as String;
             return AdaptiveAssessmentScreen(goalConceptId: goalId);
+          },
+        ),
+        GoRoute(
+          path: '/achievements',
+          builder: (context, state) {
+            // 1. Extract the passed Bloc
+            final dashboardBloc = state.extra as DashboardBloc;
+
+            // 2. Wrap the screen in BlocProvider.value to make the existing bloc available
+            return BlocProvider.value(value: dashboardBloc, child: const AchievementsScreen());
           },
         ),
       ],
