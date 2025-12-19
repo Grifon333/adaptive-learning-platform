@@ -1,4 +1,5 @@
 import 'package:adaptive_learning_app/features/auth/domain/bloc/auth_bloc.dart';
+import 'package:adaptive_learning_app/features/learning_path/data/dto/concept_dto.dart';
 import 'package:adaptive_learning_app/features/learning_path/data/dto/learning_path_dtos.dart';
 import 'package:adaptive_learning_app/features/learning_path/data/dto/learning_path_extensions.dart';
 import 'package:adaptive_learning_app/features/learning_path/domain/bloc/learning_path_bloc.dart';
@@ -6,13 +7,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
+class _UiStep {
+  _UiStep(this.step, {this.isHighlighted = false});
+  final LearningStepDto step;
+  final bool isHighlighted;
+}
+
 class LearningPathScreen extends StatelessWidget {
   const LearningPathScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Learning path')),
+      appBar: AppBar(title: const Text('My Learning Path')),
       body: BlocBuilder<LearningPathBloc, LearningPathState>(
         builder: (context, state) {
           if (state is LearningPathLoading) {
@@ -22,16 +29,42 @@ class LearningPathScreen extends StatelessWidget {
               child: Text('Error: ${state.error}', style: const TextStyle(color: Colors.red)),
             );
           } else if (state is LearningPathSuccess) {
-            final steps = state.path.steps;
-            if (steps.isEmpty) return const Center(child: Text('Path is empty.'));
+            final rawSteps = state.path.steps;
+            if (rawSteps.isEmpty) return const Center(child: Text('Path is empty.'));
+
+            final List<_UiStep> uiSteps = [];
+            bool pendingHighlight = false;
+            for (final step in rawSteps) {
+              if (step.isRemedial) {
+                pendingHighlight = true;
+              } else {
+                uiSteps.add(_UiStep(step, isHighlighted: pendingHighlight));
+                pendingHighlight = false; // Reset flag
+              }
+            }
 
             return ListView.separated(
               padding: const EdgeInsets.all(16),
-              itemCount: steps.length,
-              separatorBuilder: (ctx, index) => _ConnectorLine(isActive: steps[index].isCompleted),
+              itemCount: uiSteps.length,
+              separatorBuilder: (ctx, index) => _ConnectorLine(isActive: uiSteps[index].step.isCompleted),
               itemBuilder: (context, index) {
-                final step = steps[index];
-                return _StepCard(step: step, isLocked: step.isLocked(steps));
+                final uiStep = uiSteps[index];
+                final stepDto = uiStep.step;
+
+                // Resolve concept name
+                final concept = state.conceptMap[stepDto.conceptId];
+
+                // Determine lock state based on the FULL original list logic or simplified UI logic?
+                // Using helper extension on the DTO usually requires the full list to check previous steps.
+                // We pass the raw list to isLocked to ensure accurate dependency checking.
+                final isLocked = stepDto.isLocked(rawSteps);
+
+                return _StepCard(
+                  step: stepDto,
+                  concept: concept,
+                  isLocked: isLocked,
+                  isHighlighted: uiStep.isHighlighted,
+                );
               },
             );
           }
@@ -59,68 +92,62 @@ class _ConnectorLine extends StatelessWidget {
 }
 
 class _StepCard extends StatelessWidget {
-  const _StepCard({required this.step, required this.isLocked});
+  const _StepCard({required this.step, required this.isLocked, required this.isHighlighted, this.concept});
 
   final LearningStepDto step;
+  final ConceptDto? concept;
   final bool isLocked;
+  final bool isHighlighted;
 
   @override
   Widget build(BuildContext context) {
     final isCompleted = step.isCompleted;
 
-    if (step.isRemedial) {
-      return Container(
-        margin: const EdgeInsets.only(left: 32, bottom: 8, top: 8),
-        child: Card(
-          elevation: isLocked ? 0 : 4,
-          color: isLocked ? Colors.grey.shade50 : Colors.orange.shade50,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-            side: BorderSide(color: Colors.orange.shade200),
-          ),
-          child: ListTile(
-            contentPadding: const EdgeInsets.all(16),
-            leading: CircleAvatar(
-              backgroundColor: Colors.orange.shade100,
-              child: const Icon(Icons.refresh, color: Colors.orange),
-            ),
-            title: const Text(
-              'Review Required',
-              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.brown),
-            ),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 4),
-                Text(
-                  step.description ?? 'Please review this topic to improve mastery.',
-                  style: TextStyle(color: Colors.brown.shade600),
-                ),
-              ],
-            ),
-            trailing: isCompleted
-                ? const Icon(Icons.check_circle, color: Colors.green)
-                : const Icon(Icons.arrow_forward, color: Colors.orange),
-            onTap: isLocked ? null : () => _onStepTap(context),
-          ),
-        ),
-      );
-    }
-
-    Color cardColor = Colors.white;
-    Color textColor = Colors.black;
-    IconData trailingIcon = Icons.lock;
-    Color iconColor = Colors.grey;
+    // --- Style Logic ---
+    Color cardColor;
+    Color borderColor;
+    Color textColor;
+    Color iconColor;
+    IconData trailingIcon;
+    Color avatarBg;
+    Color avatarText;
 
     if (isLocked) {
-      cardColor = Colors.grey.shade100;
+      // Locked State
+      cardColor = Colors.grey.shade50;
+      borderColor = Colors.grey.shade200;
       textColor = Colors.grey;
+      iconColor = Colors.grey;
+      trailingIcon = Icons.lock;
+      avatarBg = Colors.grey.shade200;
+      avatarText = Colors.grey;
     } else if (isCompleted) {
-      trailingIcon = Icons.check_circle;
+      // Completed State
+      cardColor = Colors.white;
+      borderColor = Colors.green.shade100;
+      textColor = Colors.black;
       iconColor = Colors.green;
+      trailingIcon = Icons.check_circle;
+      avatarBg = Colors.green.shade100;
+      avatarText = Colors.green.shade800;
+    } else if (isHighlighted) {
+      // Highlighted (Remedial context merged)
+      cardColor = Colors.orange.shade50;
+      borderColor = Colors.orange.shade200;
+      textColor = Colors.brown.shade900;
+      iconColor = Colors.orange.shade800;
+      trailingIcon = Icons.priority_high; // Indicates attention needed
+      avatarBg = Colors.orange.shade100;
+      avatarText = Colors.orange.shade900;
     } else {
-      trailingIcon = Icons.play_circle_fill;
+      // Standard Active State
+      cardColor = Colors.white;
+      borderColor = Colors.blue.shade100;
+      textColor = Colors.black;
       iconColor = Colors.blue;
+      trailingIcon = Icons.play_circle_fill;
+      avatarBg = Colors.blue.shade100;
+      avatarText = Colors.blue.shade800;
     }
 
     return Card(
@@ -128,35 +155,47 @@ class _StepCard extends StatelessWidget {
       color: cardColor,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: isLocked ? BorderSide(color: Colors.grey.shade300) : BorderSide.none,
+        side: BorderSide(color: borderColor),
       ),
       child: ListTile(
         contentPadding: const EdgeInsets.all(16),
         leading: CircleAvatar(
-          backgroundColor: isLocked
-              ? Colors.grey.shade300
-              : (isCompleted ? Colors.green.shade100 : Colors.blue.shade100),
+          backgroundColor: avatarBg,
           child: Text(
             '${step.stepNumber}',
-            style: TextStyle(
-              color: isLocked ? Colors.grey : (isCompleted ? Colors.green.shade800 : Colors.blue.shade800),
-              fontWeight: FontWeight.bold,
-            ),
+            style: TextStyle(color: avatarText, fontWeight: FontWeight.bold),
           ),
         ),
         title: Text(
-          'Step ${step.stepNumber}',
+          concept?.name ?? 'Unknown Concept',
           style: TextStyle(fontWeight: FontWeight.bold, color: textColor),
         ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SizedBox(height: 4),
-            Text(
-              'Concept: ${step.conceptId.substring(0, 8)}...', // Replace it with the actual name by adding it to the DTO.
-              style: TextStyle(color: isLocked ? Colors.grey.shade400 : Colors.grey.shade600),
-            ),
-            if (!isLocked) ...[
+            if (concept?.description != null)
+              Text(
+                concept!.description!,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: isLocked
+                      ? Colors.grey.shade400
+                      : (isHighlighted ? Colors.brown.shade400 : Colors.grey.shade600),
+                ),
+              ),
+            if (!isLocked && isHighlighted) ...[
+              const SizedBox(height: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(color: Colors.orange.shade100, borderRadius: BorderRadius.circular(4)),
+                child: const Text(
+                  'Recommended Review',
+                  style: TextStyle(fontSize: 11, color: Colors.brown, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ] else if (!isLocked) ...[
               const SizedBox(height: 4),
               Text('${step.resources.length} materials', style: const TextStyle(fontSize: 12)),
             ],
