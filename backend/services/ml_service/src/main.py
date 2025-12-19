@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, HTTPException, status
 from loguru import logger
 
@@ -6,13 +8,29 @@ from .database import (
     get_all_student_knowledge,
     get_behavioral_profile,
     get_knowledge_states_batch,
+    init_behavioral_table,
+    init_history_table,
     update_behavioral_profile,
     update_knowledge_state_batch,
 )
 from .services.irt_engine import irt_engine
 from .services.rl_engine import rl_engine
 
-app = FastAPI(title="ML Service API")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("ML Service Initializing...")
+    try:
+        init_behavioral_table()
+        init_history_table()
+    except Exception as e:
+        logger.critical("FAILED TO INITIALIZE DATABASE. Exiting.")
+        raise e
+    yield
+    logger.info("ML Service Shutting Down...")
+
+
+app = FastAPI(title="ML Service API", lifespan=lifespan)
 
 
 @app.post("/api/v1/predict", response_model=schemas.PredictionResponse)

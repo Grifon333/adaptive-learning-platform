@@ -1,5 +1,5 @@
-import 'package:adaptive_learning_app/app/app_context_ext.dart';
-import 'package:adaptive_learning_app/app/app_env.dart';
+// import 'package:adaptive_learning_app/app/app_context_ext.dart';
+// import 'package:adaptive_learning_app/app/app_env.dart';
 import 'package:adaptive_learning_app/features/auth/presentation/widgets/session_timeout_wrapper.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -22,15 +22,15 @@ class _RootScreenState extends State<RootScreen> {
     return SessionTimeoutWrapper(
       child: Scaffold(
         // Debug button
-        floatingActionButton: context.di.env != AppEnv.prod
-            ? FloatingActionButton(
-                heroTag: 'debug_fab',
-                child: const Icon(Icons.bug_report),
-                onPressed: () {
-                  // TODO: add DebugRoutes
-                },
-              )
-            : null,
+        // floatingActionButton: context.di.env != AppEnv.prod
+        //     ? FloatingActionButton(
+        //         heroTag: 'debug_fab',
+        //         child: const Icon(Icons.bug_report),
+        //         onPressed: () {
+        //           // TODO: add DebugRoutes
+        //         },
+        //       )
+        //     : null,
         body: widget.navigationShell,
         bottomNavigationBar: BottomNavigationBar(
           items: const [

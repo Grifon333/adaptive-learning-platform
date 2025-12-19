@@ -264,7 +264,6 @@ class AdaptationEngine:
             resp = await client.get(url)
             resp.raise_for_status()
             prereqs_data = resp.json().get("items", [])
-            # Convert dicts back to KGSConcept objects to use with select_optimal_path_concept
             prereqs = [schemas.KGSConcept(**p) for p in prereqs_data]
         except Exception as e:
             logger.error(f"Failed to fetch prereqs: {e}")

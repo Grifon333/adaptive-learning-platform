@@ -72,30 +72,30 @@ class _RegisterScreenState extends State<RegisterScreen> {
               padding: const EdgeInsets.all(16.0),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
+                spacing: 16,
                 children: [
                   TextFormField(
                     controller: _firstNameController,
-                    decoration: InputDecoration(labelText: context.l10n.firstNameLabel),
+                    decoration: InputDecoration(labelText: context.l10n.firstNameLabel, border: OutlineInputBorder()),
                     validator: (value) => (value?.isEmpty ?? true) ? 'Enter first name' : null,
                   ),
                   TextFormField(
                     controller: _lastNameController,
-                    decoration: InputDecoration(labelText: context.l10n.lastNameLabel),
+                    decoration: InputDecoration(labelText: context.l10n.lastNameLabel, border: OutlineInputBorder()),
                     validator: (value) => (value?.isEmpty ?? true) ? 'Enter last name' : null,
                   ),
                   TextFormField(
                     controller: _emailController,
-                    decoration: InputDecoration(labelText: context.l10n.emailLabel),
+                    decoration: InputDecoration(labelText: context.l10n.emailLabel, border: OutlineInputBorder()),
                     keyboardType: TextInputType.emailAddress,
                     validator: (value) => (value?.isEmpty ?? true) ? 'Enter an email' : null,
                   ),
                   TextFormField(
                     controller: _passwordController,
-                    decoration: InputDecoration(labelText: context.l10n.passwordLabel),
+                    decoration: InputDecoration(labelText: context.l10n.passwordLabel, border: OutlineInputBorder()),
                     obscureText: true,
                     validator: (value) => (value?.isEmpty ?? true) ? 'Enter a password' : null,
                   ),
-                  const SizedBox(height: 20),
                   isLoading
                       ? const CircularProgressIndicator()
                       : ElevatedButton(onPressed: _submit, child: Text(context.l10n.registerButton)),

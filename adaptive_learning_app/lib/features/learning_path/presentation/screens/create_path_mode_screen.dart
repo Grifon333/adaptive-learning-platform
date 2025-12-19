@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 // Enum for creation types
-enum CreatePathMode { startEnd, endOnly, startOnly, manual }
+enum CreatePathMode { startEnd, endOnly, startOnly }
 
 class CreatePathModeScreen extends StatelessWidget {
   const CreatePathModeScreen({super.key});
@@ -39,14 +39,6 @@ class CreatePathModeScreen extends StatelessWidget {
             color: Colors.green,
             mode: CreatePathMode.startOnly,
           ),
-          const SizedBox(height: 16),
-          _ModeCard(
-            title: 'Designer',
-            description: 'Create your own path by adding topics manually.',
-            icon: Icons.build,
-            color: Colors.orange,
-            mode: CreatePathMode.manual,
-          ),
         ],
       ),
     );
@@ -76,12 +68,7 @@ class _ModeCard extends StatelessWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
         onTap: () {
-          if (mode == CreatePathMode.manual) {
-            ScaffoldMessenger.of(context).clearSnackBars();
-            ScaffoldMessenger.of(
-              context,
-            ).showSnackBar(const SnackBar(content: Text('Trajectory designer in development')));
-          } else if (mode == CreatePathMode.startOnly) {
+          if (mode == CreatePathMode.startOnly) {
             // The backend does not yet support Forward Expansion.
             ScaffoldMessenger.of(context).clearSnackBars();
             ScaffoldMessenger.of(
