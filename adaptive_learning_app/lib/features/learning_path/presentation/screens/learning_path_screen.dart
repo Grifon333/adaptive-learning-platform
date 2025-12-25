@@ -1,4 +1,5 @@
 import 'package:adaptive_learning_app/features/auth/domain/bloc/auth_bloc.dart';
+import 'package:adaptive_learning_app/features/learning_path/data/dto/concept_dto.dart';
 import 'package:adaptive_learning_app/features/learning_path/data/dto/learning_path_dtos.dart';
 import 'package:adaptive_learning_app/features/learning_path/data/dto/learning_path_extensions.dart';
 import 'package:adaptive_learning_app/features/learning_path/domain/bloc/learning_path_bloc.dart';
@@ -12,7 +13,7 @@ class LearningPathScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Learning path')),
+      appBar: AppBar(title: const Text('My Learning Path')),
       body: BlocBuilder<LearningPathBloc, LearningPathState>(
         builder: (context, state) {
           if (state is LearningPathLoading) {
@@ -31,7 +32,14 @@ class LearningPathScreen extends StatelessWidget {
               separatorBuilder: (ctx, index) => _ConnectorLine(isActive: steps[index].isCompleted),
               itemBuilder: (context, index) {
                 final step = steps[index];
-                return _StepCard(step: step, isLocked: step.isLocked(steps));
+
+                // Resolve concept name using the map from the state
+                final concept = state.conceptMap[step.conceptId];
+
+                // Calculate lock state
+                final isLocked = step.isLocked(steps);
+
+                return _StepCard(step: step, concept: concept, isLocked: isLocked);
               },
             );
           }
@@ -59,68 +67,84 @@ class _ConnectorLine extends StatelessWidget {
 }
 
 class _StepCard extends StatelessWidget {
-  const _StepCard({required this.step, required this.isLocked});
+  const _StepCard({required this.step, required this.isLocked, this.concept});
 
   final LearningStepDto step;
+  final ConceptDto? concept;
   final bool isLocked;
 
   @override
   Widget build(BuildContext context) {
     final isCompleted = step.isCompleted;
 
+    // --- CASE 1: Remedial Step (Yellow, Indented, "Review Required") ---
     if (step.isRemedial) {
       return Container(
+        // Restore the indentation for remedial steps
         margin: const EdgeInsets.only(left: 32, bottom: 8, top: 8),
         child: Card(
           elevation: isLocked ? 0 : 4,
           color: isLocked ? Colors.grey.shade50 : Colors.orange.shade50,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
-            side: BorderSide(color: Colors.orange.shade200),
+            side: BorderSide(color: isLocked ? Colors.grey.shade200 : Colors.orange.shade200),
           ),
           child: ListTile(
             contentPadding: const EdgeInsets.all(16),
             leading: CircleAvatar(
-              backgroundColor: Colors.orange.shade100,
-              child: const Icon(Icons.refresh, color: Colors.orange),
+              backgroundColor: isLocked ? Colors.grey.shade200 : Colors.orange.shade100,
+              child: Icon(Icons.refresh, color: isLocked ? Colors.grey : Colors.orange),
             ),
-            title: const Text(
+            title: Text(
               'Review Required',
-              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.brown),
+              style: TextStyle(fontWeight: FontWeight.bold, color: isLocked ? Colors.grey : Colors.brown),
             ),
             subtitle: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 4),
+                // Display the Concept Name instead of ID
                 Text(
-                  step.description ?? 'Please review this topic to improve mastery.',
-                  style: TextStyle(color: Colors.brown.shade600),
+                  concept?.name ?? 'Unknown Concept',
+                  style: TextStyle(fontWeight: FontWeight.bold, color: Colors.brown.shade800),
                 ),
+                if (step.description != null) ...[
+                  const SizedBox(height: 2),
+                  Text(step.description!, style: TextStyle(color: Colors.brown.shade600, fontSize: 12)),
+                ],
               ],
             ),
             trailing: isCompleted
                 ? const Icon(Icons.check_circle, color: Colors.green)
-                : const Icon(Icons.arrow_forward, color: Colors.orange),
+                : Icon(Icons.arrow_forward, color: isLocked ? Colors.grey : Colors.orange),
             onTap: isLocked ? null : () => _onStepTap(context),
           ),
         ),
       );
     }
 
+    // --- CASE 2: Standard Step (White/Green/Blue, Full Width) ---
     Color cardColor = Colors.white;
     Color textColor = Colors.black;
     IconData trailingIcon = Icons.lock;
     Color iconColor = Colors.grey;
+    Color avatarBg = Colors.grey.shade300;
+    Color avatarText = Colors.grey;
 
     if (isLocked) {
-      cardColor = Colors.grey.shade100;
+      cardColor = Colors.grey.shade50;
       textColor = Colors.grey;
+      avatarBg = Colors.grey.shade200;
     } else if (isCompleted) {
       trailingIcon = Icons.check_circle;
       iconColor = Colors.green;
+      avatarBg = Colors.green.shade100;
+      avatarText = Colors.green.shade800;
     } else {
       trailingIcon = Icons.play_circle_fill;
       iconColor = Colors.blue;
+      avatarBg = Colors.blue.shade100;
+      avatarText = Colors.blue.shade800;
     }
 
     return Card(
@@ -133,15 +157,10 @@ class _StepCard extends StatelessWidget {
       child: ListTile(
         contentPadding: const EdgeInsets.all(16),
         leading: CircleAvatar(
-          backgroundColor: isLocked
-              ? Colors.grey.shade300
-              : (isCompleted ? Colors.green.shade100 : Colors.blue.shade100),
+          backgroundColor: avatarBg,
           child: Text(
             '${step.stepNumber}',
-            style: TextStyle(
-              color: isLocked ? Colors.grey : (isCompleted ? Colors.green.shade800 : Colors.blue.shade800),
-              fontWeight: FontWeight.bold,
-            ),
+            style: TextStyle(color: avatarText, fontWeight: FontWeight.bold),
           ),
         ),
         title: Text(
@@ -152,9 +171,13 @@ class _StepCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SizedBox(height: 4),
+            // Display Concept Name
             Text(
-              'Concept: ${step.conceptId.substring(0, 8)}...', // Replace it with the actual name by adding it to the DTO.
-              style: TextStyle(color: isLocked ? Colors.grey.shade400 : Colors.grey.shade600),
+              concept?.name ?? 'Unknown',
+              style: TextStyle(
+                color: isLocked ? Colors.grey.shade400 : Colors.grey.shade600,
+                fontWeight: FontWeight.w500,
+              ),
             ),
             if (!isLocked) ...[
               const SizedBox(height: 4),
@@ -178,11 +201,6 @@ class _StepCard extends StatelessWidget {
   void _onStepTap(BuildContext context) async {
     await context.pushNamed('lesson', extra: step);
     if (context.mounted) {
-      // STATUS UPDATE:
-      // When we return from class, we don't know if the student passed the test.
-      // But we know we need to check.
-      // The easiest way is to reload the path.
-      // In a real application, this can be optimized.
       final authState = context.read<AuthBloc>().state;
       final studentId = (authState is AuthAuthenticated) ? authState.userId : '';
       context.read<LearningPathBloc>().add(LearningPathRefreshRequested(studentId));

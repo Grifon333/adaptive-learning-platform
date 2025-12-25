@@ -1,7 +1,11 @@
+import 'package:adaptive_learning_app/app/app_context_ext.dart';
 import 'package:adaptive_learning_app/features/learning_path/data/dto/learning_path_dtos.dart';
+import 'package:adaptive_learning_app/features/learning_path/domain/lesson_bloc/lesson_bloc.dart';
+import 'package:adaptive_learning_app/features/learning_path/presentation/widgets/lesson_markdown_viewer.dart';
 import 'package:adaptive_learning_app/features/learning_path/presentation/widgets/lesson_web_viewer.dart';
 import 'package:adaptive_learning_app/features/learning_path/presentation/widgets/lesson_youtube_player.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
 class LessonScreen extends StatefulWidget {
@@ -22,8 +26,22 @@ class _LessonScreenState extends State<LessonScreen> {
     if (widget.step.resources.isNotEmpty) _selectedResource = widget.step.resources.first;
   }
 
-  void _selectResource(ResourceDto recource) {
-    setState(() => _selectedResource = recource);
+  void _selectResource(ResourceDto resource) {
+    setState(() => _selectedResource = resource);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.di.services.trackingService.log(
+          'CONTENT_VIEW',
+          metadata: {
+            'resourceId': resource.id,
+            'title': resource.title,
+            'type': resource.type,
+            'stepId': widget.step.id,
+          },
+        );
+      }
+    });
   }
 
   Future<void> _takeQuiz() async {
@@ -36,40 +54,70 @@ class _LessonScreenState extends State<LessonScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text('Step ${widget.step.stepNumber}')),
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          final double totalHeight = constraints.maxHeight;
-          final double bottomSheetHeight = totalHeight * 0.4;
-          final double contentHeight = (totalHeight * 0.6) + 20;
-          return Stack(
-            children: [
-              Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                height: contentHeight,
-                child: ColoredBox(
-                  color: Colors.black12,
-                  child: _ContentArea(resource: _selectedResource),
-                ),
+    return BlocListener<LessonBloc, LessonState>(
+      listener: (context, state) {
+        if (state is LessonCompletionSuccess) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Step Completed!'), backgroundColor: Colors.green));
+          // Return 'true' to indicate update needed
+          // The router/parent logic should handle the refresh based on this pop result
+          // But since we are using GoRouter, we can just pop and let the BLoC refresh on the previous screen
+          context.pop();
+        }
+        if (state is LessonFailure) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Error: ${state.error}'), backgroundColor: Colors.red));
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text('Step ${widget.step.stepNumber}'),
+          actions: [
+            if (widget.step.status != 'completed')
+              IconButton(
+                icon: const Icon(Icons.check_circle_outline),
+                tooltip: 'Mark as Complete',
+                onPressed: () {
+                  context.read<LessonBloc>().add(LessonCompleteRequested());
+                },
               ),
-              Positioned(
-                bottom: 0,
-                left: 0,
-                right: 0,
-                height: bottomSheetHeight,
-                child: _MaterialsSheet(
-                  resources: widget.step.resources,
-                  selectedResource: _selectedResource,
-                  selectResource: _selectResource,
-                  takeQuiz: _takeQuiz,
+          ],
+        ),
+        body: LayoutBuilder(
+          builder: (context, constraints) {
+            final double totalHeight = constraints.maxHeight;
+            final double bottomSheetHeight = totalHeight * 0.4;
+            final double contentHeight = (totalHeight * 0.6) + 20;
+            return Stack(
+              children: [
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: contentHeight,
+                  child: ColoredBox(
+                    color: Colors.black12,
+                    child: _ContentArea(resource: _selectedResource),
+                  ),
                 ),
-              ),
-            ],
-          );
-        },
+                Positioned(
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  height: bottomSheetHeight,
+                  child: _MaterialsSheet(
+                    resources: widget.step.resources,
+                    selectedResource: _selectedResource,
+                    selectResource: _selectResource,
+                    takeQuiz: _takeQuiz,
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
       ),
     );
   }
@@ -156,8 +204,17 @@ class _ContentArea extends StatelessWidget {
     // Simple logic to determine type.
     // Ideally, this should be an enum from the DTO.
     final url = resource!.url;
-    final isVideo = resource!.type.toLowerCase().contains('video') || url.contains('youtube');
-    return isVideo ? LessonYoutubePlayer(key: ValueKey(url), url: url) : LessonWebViewer(key: ValueKey(url), url: url);
+    final type = resource!.type.toLowerCase();
+
+    // [Updated Logic]
+    if (type.contains('video') || url.contains('youtube')) return LessonYoutubePlayer(key: ValueKey(url), url: url);
+
+    if (type.contains('markdown') || type.contains('text') || url.endsWith('.md') || url.endsWith('.txt')) {
+      return LessonMarkdownViewer(key: ValueKey(url), url: url);
+    }
+
+    // Default fallback for HTML/PDF/Other
+    return LessonWebViewer(key: ValueKey(url), url: url);
   }
 }
 

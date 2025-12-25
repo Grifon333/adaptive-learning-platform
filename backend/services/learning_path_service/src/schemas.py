@@ -1,7 +1,7 @@
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 # --- Request ---
 
@@ -33,6 +33,17 @@ class KGSConcept(BaseModel):
 
 class KGSPathResponse(BaseModel):
     path: list[KGSConcept]
+
+
+class KGSPathCandidate(BaseModel):
+    id: str
+    concepts: list[KGSConcept]
+    total_difficulty: float
+    total_time: int
+
+
+class KGSMultiPathResponse(BaseModel):
+    candidates: list[KGSPathCandidate]
 
 
 # --- Schemas to User Service ---
@@ -88,7 +99,7 @@ class RecommendationResponse(BaseModel):
 
 class QuestionOption(BaseModel):
     text: str
-    is_correct: bool
+    is_correct: bool = False
 
 
 class Question(BaseModel):
@@ -99,3 +110,86 @@ class Question(BaseModel):
 
 class QuizResponse(BaseModel):
     questions: list[Question]
+
+
+class StepQuizSubmission(BaseModel):
+    step_id: UUID
+    concept_id: str
+    answers: dict[str, int]  # {question_id: option_index}
+
+
+class StepQuizResult(BaseModel):
+    passed: bool
+    score: float
+    message: str
+    adaptation_occurred: bool = False
+
+
+# --- Assessment Schemas ---
+
+
+class AssessmentStartRequest(BaseModel):
+    student_id: UUID
+    goal_concept_id: str
+
+
+class AssessmentQuestion(BaseModel):
+    id: str
+    text: str
+    options: list[dict[str, Any]]
+    concept_id: str
+    difficulty: float
+
+
+class AssessmentSession(BaseModel):
+    session_id: str
+    total_questions: int
+    questions: list[AssessmentQuestion]
+
+
+class AssessmentSubmission(BaseModel):
+    student_id: UUID
+    goal_concept_id: str
+    answers: dict[str, int]  # {question_id: selected_option_index}
+
+
+# --- User Service Integration Schemas ---
+
+
+class StudentProfile(BaseModel):
+    id: UUID
+    email: str
+    first_name: str
+    last_name: str
+    role: str
+
+    # Profile Data
+    cognitive_profile: dict[str, Any] = {}  # {"attention": 0.5, "memory": 0.6}
+    learning_preferences: dict[str, Any] = {}  # {"visual": 0.8, "reading": 0.2}
+    learning_goals: list[str] = []
+    study_schedule: dict[str, Any] = {}
+    timezone: str | None = None
+    privacy_settings: dict[str, Any] = {}
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AdaptiveSessionState(BaseModel):
+    student_id: UUID
+    goal_concept_id: str
+    history: list[dict[str, Any]] = []  # List of {question_id, difficulty, correct}
+    start_time: str
+    current_question: AssessmentQuestion | None = None
+
+
+class AdaptiveSubmitRequest(BaseModel):
+    session_state: AdaptiveSessionState
+    answer_index: int
+
+
+class AdaptiveResponse(BaseModel):
+    session_state: AdaptiveSessionState
+    completed: bool = False
+    final_mastery: float | None = None
+    message: str | None = None
+    created_learning_path: LearningPathResponse | None = None

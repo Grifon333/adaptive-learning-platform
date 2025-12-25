@@ -1,9 +1,9 @@
-import torch
 import torch.nn as nn
+
 
 class DKT(nn.Module):
     def __init__(self, input_dim, hidden_dim, layer_dim, output_dim):
-        super(DKT, self).__init__()
+        super().__init__()
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
         self.layer_dim = layer_dim
@@ -29,8 +29,9 @@ class DKT(nn.Module):
         res = self.sigmoid(self.fc(out))
         return res
 
+
 # Factory function for model initialization
 def get_model(config):
-    model = DKT(config.INPUT_DIM, config.HIDDEN_DIM, config.LAYER_DIM, config.OUTPUT_DIM)
-    model.eval() # Set inference mode (no training)
+    model = DKT(config.INPUT_DIM_DKT, config.HIDDEN_DIM, config.LAYER_DIM, config.OUTPUT_DIM_DKT)
+    model.eval()  # Set inference mode (no training)
     return model

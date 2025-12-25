@@ -11,10 +11,13 @@ class LearningPathInitial extends LearningPathState {}
 class LearningPathLoading extends LearningPathState {}
 
 class LearningPathSuccess extends LearningPathState {
-  const LearningPathSuccess(this.path);
+  const LearningPathSuccess({required this.path, required this.conceptMap});
+
   final LearningPathDto path;
+  final Map<String, ConceptDto> conceptMap;
+
   @override
-  List<Object?> get props => [path];
+  List<Object?> get props => [path, conceptMap];
 }
 
 class LearningPathFailure extends LearningPathState {

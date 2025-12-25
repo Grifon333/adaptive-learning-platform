@@ -40,3 +40,40 @@ class TokenResponse {
     return TokenResponse(accessToken: map['access_token'] as String, refreshToken: map['refresh_token'] as String);
   }
 }
+
+@immutable
+class SocialLoginRequest {
+  final String email;
+  final String provider; // "google" | "microsoft"
+  final String providerId;
+  final String firstName;
+  final String lastName;
+  final String? avatarUrl;
+
+  const SocialLoginRequest({
+    required this.email,
+    required this.provider,
+    required this.providerId,
+    required this.firstName,
+    required this.lastName,
+    this.avatarUrl,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'email': email,
+    'provider': provider,
+    'provider_id': providerId,
+    'first_name': firstName,
+    'last_name': lastName,
+    'avatar_url': avatarUrl,
+  };
+}
+
+@immutable
+class ForgotPasswordRequest {
+  final String email;
+
+  const ForgotPasswordRequest({required this.email});
+
+  Map<String, dynamic> toJson() => {'email': email};
+}

@@ -13,13 +13,16 @@ final class EventRepository implements IEventRepository {
   String get name => 'EventRepository';
 
   @override
-  Future<void> sendEvent({
-    required String studentId,
-    required String eventType,
-    required Map<String, dynamic> metadata,
-  }) async {
-    final event = EventDto(eventType: eventType, studentId: studentId, metadata: metadata);
+  Future<void> sendEvent(EventDto event) async {
     final serviceUrl = appConfig.eventServiceUrl;
     await httpClient.post('$serviceUrl/events', data: event.toJson());
+  }
+
+  @override
+  Future<void> sendBatch(List<EventDto> events) async {
+    if (events.isEmpty) return;
+    final serviceUrl = appConfig.eventServiceUrl;
+    final payload = {'events': events.map((e) => e.toJson()).toList()};
+    await httpClient.post('$serviceUrl/events/batch', data: payload);
   }
 }

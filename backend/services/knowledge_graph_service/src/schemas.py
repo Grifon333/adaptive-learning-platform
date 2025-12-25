@@ -1,3 +1,5 @@
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 # --- Resource Schemas ---
@@ -8,6 +10,7 @@ class ResourceBase(BaseModel):
     type: str = Field(..., description="video, article, quiz, etc.")
     url: str
     duration: int = Field(default=0, description="Duration in minutes")
+    difficulty: float = Field(default=1.0, ge=1.0, le=10.0, description="Cognitive load/complexity")
 
 
 class ResourceCreate(ResourceBase):
@@ -16,8 +19,20 @@ class ResourceCreate(ResourceBase):
 
 class Resource(ResourceBase):
     id: str
-
     model_config = {"from_attributes": True}
+
+
+class ResourceUpdate(BaseModel):
+    title: str | None = None
+    type: str | None = Field(default=None, description="video, article, quiz, etc.")
+    url: str | None = None
+    duration: int | None = None
+    difficulty: float | None = Field(default=None, ge=1.0, le=10.0)
+
+
+class ResourceListResponse(BaseModel):
+    total: int
+    items: list[Resource]
 
 
 # --- Concept Schemas ---
@@ -27,7 +42,7 @@ class ConceptBase(BaseModel):
     name: str
     description: str | None = None
     difficulty: float = Field(default=1.0, ge=1.0, le=10.0)
-    estimated_time: int = Field(default=30, ge=0)  # in minutes
+    estimated_time: int = Field(default=30, ge=0)
 
 
 class ConceptCreate(ConceptBase):
@@ -37,10 +52,19 @@ class ConceptCreate(ConceptBase):
 class Concept(ConceptBase):
     id: str
     resources: list[Resource] = []
+    model_config = {"from_attributes": True}
 
-    model_config = {
-        "from_attributes": True  # Allows mapping from objects (e.g., Neo4j nodes)
-    }
+
+class ConceptUpdate(BaseModel):
+    name: str | None = None
+    description: str | None = None
+    difficulty: float | None = Field(default=None, ge=1.0, le=10.0)
+    estimated_time: int | None = Field(default=None, ge=0)
+
+
+class ConceptListResponse(BaseModel):
+    total: int
+    items: list[Concept]
 
 
 # --- Relationship & Path Schemas ---
@@ -49,12 +73,14 @@ class Concept(ConceptBase):
 class RelationshipCreate(BaseModel):
     start_concept_id: str
     end_concept_id: str
-    rel_type: str = Field(default="PREREQUISITE", alias="type")
+    rel_type: str = Field(default="PREREQUISITE", description="PREREQUISITE or RELATED_TO")
+    weight: float = Field(default=1.0, gt=0.0, le=1.0, description="Strength of dependency or similarity")
 
 
-class ResourceLink(BaseModel):
-    concept_id: str
-    resource_id: str
+class RelationshipDelete(BaseModel):
+    start_concept_id: str
+    end_concept_id: str
+    rel_type: str = "PREREQUISITE"
 
 
 class PathResponse(BaseModel):
@@ -81,15 +107,70 @@ class QuestionOption(BaseModel):
 class QuestionCreate(BaseModel):
     text: str
     options: list[QuestionOption]
+    difficulty: float = 1.0
 
 
 class Question(BaseModel):
     id: str
     text: str
     options: list[QuestionOption]
-
+    difficulty: float = 1.0
     model_config = {"from_attributes": True}
 
 
 class QuizResponse(BaseModel):
     questions: list[Question]
+
+
+class BatchQuestionsRequest(BaseModel):
+    concept_ids: list[str]
+    min_difficulty: float | None = None
+    max_difficulty: float | None = None
+    limit_per_concept: int = 3
+
+
+class ConceptQuestions(BaseModel):
+    concept_id: str
+    questions: list[Question]
+
+
+class BatchQuestionsResponse(BaseModel):
+    data: list[ConceptQuestions]
+
+
+class PathCandidate(BaseModel):
+    id: str
+    concepts: list[Concept]
+    total_difficulty: float
+    total_time: int
+
+
+class MultiPathResponse(BaseModel):
+    candidates: list[PathCandidate]
+
+
+class AdaptiveQuestionRequest(BaseModel):
+    concept_ids: list[str]
+    target_difficulty: float
+    exclude_question_ids: list[str] = []
+
+
+class AdaptiveQuestionResponse(Question):
+    concept_id: str
+
+
+class OptimalPathRequest(BaseModel):
+    start_concept_id: str | None = None
+    goal_concept_id: str
+    # Map of concept_id -> mastery_level (0.0 to 1.0)
+    student_knowledge: dict[str, float] = {}
+    # Learning preferences: {"visual": 0.8, "text": 0.2, ...}
+    learning_preferences: dict[str, Any] = {}
+    # Weight for difficulty mismatch penalty (alpha in math model)
+    difficulty_penalty: float = 2.0
+
+
+class OptimalPathResponse(BaseModel):
+    path: list[Concept]
+    total_estimated_time: int
+    total_complexity: float

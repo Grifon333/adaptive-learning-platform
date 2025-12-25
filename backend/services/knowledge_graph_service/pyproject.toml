@@ -14,7 +14,8 @@ dependencies = [
     "python-dotenv (>=1.2.1,<2.0.0)",
     "pydantic-settings (>=2.12.0,<3.0.0)",
     "neo4j (>=6.0.3,<7.0.0)",
-    "loguru (>=0.7.3,<0.8.0)"
+    "loguru (>=0.7.3,<0.8.0)",
+    "python-multipart (>=0.0.20,<0.0.21)"
 ]
 
 
@@ -34,7 +35,7 @@ dev = [
 ]
 
 [tool.ruff]
-line-length = 88
+line-length = 120
 
 [tool.ruff.lint]
 select = ["E", "W", "F", "I", "C90", "N", "UP", "B"]

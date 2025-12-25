@@ -16,7 +16,8 @@ dependencies = [
     "loguru (>=0.7.3,<0.8.0)",
     "python-dotenv (>=1.2.1,<2.0.0)",
     "celery (>=5.5.3,<6.0.0)",
-    "redis (>=7.1.0,<8.0.0)"
+    "redis (>=7.1.0,<8.0.0)",
+    "httpx (>=0.28.1,<0.29.0)"
 ]
 
 
@@ -32,7 +33,7 @@ dev = [
 ]
 
 [tool.ruff]
-line-length = 88
+line-length = 120
 
 [tool.ruff.lint]
 select = ["E", "W", "F", "I", "C90", "N", "UP", "B"]

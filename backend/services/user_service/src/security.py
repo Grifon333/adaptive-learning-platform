@@ -1,8 +1,6 @@
 import uuid
 from datetime import UTC, datetime, timedelta
-from typing import Literal
 
-from fastapi import HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -30,7 +28,7 @@ def get_password_hash(password):
 
 def create_token(
     data: dict,
-    token_type: Literal["access", "refresh"],
+    token_type: str,  # access, refresh, verification, reset
     expires_delta: timedelta | None = None,
 ) -> str:
     to_encode = data.copy()
@@ -39,37 +37,58 @@ def create_token(
     if expires_delta:
         expire = now + expires_delta
     else:
+        # Default expirations
         if token_type == "access":
-            minutes = ACCESS_TOKEN_EXPIRE_MINUTES
+            minutes = ACCESS_TOKEN_EXPIRE_MINUTES  # 1440 (24h)
+        elif token_type == "verification":
+            minutes = 1440 * 7  # 7 days
+        elif token_type == "reset":
+            minutes = 60  # 1 hour
         else:
             minutes = REFRESH_TOKEN_EXPIRE_MINUTES
         expire = now + timedelta(minutes=minutes)
 
-    to_encode.update({"exp": expire, "iat": now, "token_type": token_type})
+    to_encode.update({"exp": expire, "iat": now, "type": token_type})
     encoded_jwt: str = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
 
-def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
-    return create_token(data=data, token_type="access", expires_delta=expires_delta)
+def create_access_token(data: dict) -> str:
+    return create_token(data, "access")
 
 
-def create_refresh_token(data: dict, expires_delta: timedelta | None = None) -> str:
-    return create_token(data=data, token_type="refresh", expires_delta=expires_delta)
+def create_refresh_token(data: dict) -> str:
+    return create_token(data, "refresh")
 
 
-def decode_access_token(token: str) -> schemas.TokenData:
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
+def create_verification_token(email: str) -> str:
+    return create_token({"sub": email}, "verification")
+
+
+def create_password_reset_token(email: str) -> str:
+    return create_token({"sub": email}, "reset")
+
+
+def decode_token(token: str, expected_type: str) -> str | None:
+    """Decodes token and returns the subject (e.g., user_id or email) if valid."""
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        token_type = payload.get("type")
+        if token_type != expected_type:
+            return None
+        return str(payload.get("sub"))
+    except JWTError:
+        return None
+
+
+def decode_access_token(token: str) -> schemas.TokenData | None:
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id_str: str | None = payload.get("sub")
-        token_type: str | None = payload.get("token_type")
-        if user_id_str is None or token_type is None:
-            raise credentials_exception
+        token_type: str | None = payload.get("type")
+        if user_id_str is None or token_type != "access":
+            return None
         return schemas.TokenData(user_id=uuid.UUID(user_id_str), token_type=token_type)
+
     except (JWTError, ValueError):
-        raise credentials_exception from None
+        return None

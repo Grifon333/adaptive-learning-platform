@@ -3,6 +3,8 @@ import 'package:adaptive_learning_app/features/auth/domain/bloc/auth_bloc.dart';
 import 'package:adaptive_learning_app/features/dashboard/data/dto/dashboard_dtos.dart';
 import 'package:adaptive_learning_app/features/dashboard/domain/bloc/dashboard_bloc.dart';
 import 'package:adaptive_learning_app/features/dashboard/presentation/widgets/activity_chart.dart';
+import 'package:adaptive_learning_app/features/gamification/domain/gamification_logic.dart';
+import 'package:adaptive_learning_app/features/gamification/presentation/gamification_widgets.dart';
 import 'package:adaptive_learning_app/features/learning_path/data/dto/learning_path_dtos.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -44,6 +46,7 @@ class _DashboardView extends StatelessWidget {
           if (state is DashboardFailure) return Center(child: Text('Error: ${state.error}'));
           if (state is DashboardSuccess) {
             final analytics = state.analytics;
+            final userLevel = GamificationEngine.calculateLevel(state.analytics.totalConceptsLearned);
             return RefreshIndicator(
               onRefresh: () async {
                 context.read<DashboardBloc>().add(DashboardLoadRequested(studentId));
@@ -53,6 +56,16 @@ class _DashboardView extends StatelessWidget {
                 children: [
                   // 1. Header with Stats
                   _AnalyticsHeader(analytics: analytics),
+                  const SizedBox(height: 24),
+
+                  GamificationSummaryCard(
+                    userLevel: userLevel,
+                    currentStreak: state.analytics.currentStreak,
+                    onTap: () {
+                      final dashboardBloc = context.read<DashboardBloc>();
+                      context.push('/achievements', extra: dashboardBloc);
+                    },
+                  ),
                   const SizedBox(height: 24),
 
                   // 2. Chart

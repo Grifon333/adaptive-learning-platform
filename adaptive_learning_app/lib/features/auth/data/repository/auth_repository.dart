@@ -31,6 +31,37 @@ final class AuthRepository implements IAuthRepository {
   }
 
   @override
+  Future<void> socialLogin({
+    required String email,
+    required String provider,
+    required String providerId,
+    required String firstName,
+    required String lastName,
+    String? avatarUrl,
+  }) async {
+    final request = SocialLoginRequest(
+      email: email,
+      provider: provider,
+      providerId: providerId,
+      firstName: firstName,
+      lastName: lastName,
+      avatarUrl: avatarUrl,
+    );
+
+    final response = await httpClient.post('/auth/social-login', data: request.toJson());
+
+    final tokenResponse = TokenResponse.fromJson(response.data);
+    await secureStorage.write(SecureStorageKeys.accessToken, tokenResponse.accessToken);
+    await secureStorage.write(SecureStorageKeys.refreshToken, tokenResponse.refreshToken);
+  }
+
+  @override
+  Future<void> forgotPassword(String email) async {
+    final request = ForgotPasswordRequest(email: email);
+    await httpClient.post('/auth/forgot-password', data: request.toJson());
+  }
+
+  @override
   Future<void> register({
     required String email,
     required String password,

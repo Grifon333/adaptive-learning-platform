@@ -6,6 +6,17 @@ import 'package:adaptive_learning_app/di/di_base_repository.dart';
 abstract interface class IAuthRepository with DiBaseRepository {
   Future<void> login({required String email, required String password});
 
+  Future<void> socialLogin({
+    required String email,
+    required String provider,
+    required String providerId,
+    required String firstName,
+    required String lastName,
+    String? avatarUrl,
+  });
+
+  Future<void> forgotPassword(String email);
+
   Future<void> register({
     required String email,
     required String password,

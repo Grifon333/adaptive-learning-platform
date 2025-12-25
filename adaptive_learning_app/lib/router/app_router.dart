@@ -1,11 +1,19 @@
 import 'dart:async';
 
+import 'package:adaptive_learning_app/app/app_context_ext.dart';
+import 'package:adaptive_learning_app/features/admin_graph/presentation/screens/admin_graph_screen.dart';
 import 'package:adaptive_learning_app/features/auth/domain/bloc/auth_bloc.dart';
 import 'package:adaptive_learning_app/features/auth/presentation/screens/login_screen.dart';
 import 'package:adaptive_learning_app/features/auth/presentation/screens/register_screen.dart';
+import 'package:adaptive_learning_app/features/dashboard/domain/bloc/dashboard_bloc.dart';
 import 'package:adaptive_learning_app/features/dashboard/presentation/screens/dashboard_screen.dart';
 import 'package:adaptive_learning_app/features/debug/i_debug_service.dart';
+import 'package:adaptive_learning_app/features/events/service/tracking_service.dart';
+import 'package:adaptive_learning_app/features/events/tracking_route_observer.dart';
+import 'package:adaptive_learning_app/features/gamification/presentation/achievements_screen.dart';
 import 'package:adaptive_learning_app/features/learning_path/data/dto/learning_path_dtos.dart';
+import 'package:adaptive_learning_app/features/learning_path/domain/lesson_bloc/lesson_bloc.dart';
+import 'package:adaptive_learning_app/features/learning_path/presentation/screens/adaptive_assessment_screen.dart';
 import 'package:adaptive_learning_app/features/learning_path/presentation/screens/concept_selector_screen.dart';
 import 'package:adaptive_learning_app/features/learning_path/presentation/screens/create_path_mode_screen.dart';
 import 'package:adaptive_learning_app/features/learning_path/presentation/screens/learning_path_screen.dart';
@@ -16,6 +24,7 @@ import 'package:adaptive_learning_app/features/profile/presentation/screens/prof
 import 'package:adaptive_learning_app/features/root/root_screen.dart';
 import 'package:adaptive_learning_app/features/splash/splash_screen.dart';
 import 'package:flutter/widgets.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
 /// {@template app_router}
@@ -25,11 +34,23 @@ class AppRouter {
   static final rootNavigatorKey = GlobalKey<NavigatorState>();
   static const String initialLocation = '/splash';
 
-  static GoRouter createRouter(IDebugService debugService, AuthBloc authBloc) {
+  static GoRouter createRouter(IDebugService debugService, AuthBloc authBloc, TrackingService trackingService) {
+    authBloc.stream.listen((state) {
+      if (state is AuthAuthenticated) {
+        trackingService
+          ..userId = state.userId
+          ..log('SESSION_START');
+      } else if (state is AuthUnauthenticated) {
+        trackingService
+          ..log('SESSION_END')
+          ..userId = null;
+      }
+    });
+
     return GoRouter(
       navigatorKey: rootNavigatorKey,
       initialLocation: initialLocation,
-      observers: [debugService.routeObserver],
+      observers: [debugService.routeObserver, TrackingRouteObserver(trackingService)],
       refreshListenable: GoRouterRefreshStream(authBloc.stream),
       redirect: (BuildContext context, GoRouterState state) {
         final authState = authBloc.state;
@@ -101,7 +122,12 @@ class AppRouter {
           name: 'lesson',
           builder: (context, state) {
             final step = state.extra as LearningStepDto;
-            return LessonScreen(step: step);
+            return BlocProvider(
+              create: (ctx) =>
+                  LessonBloc(repository: ctx.di.repositories.learningPathRepository, stepId: step.id)
+                    ..add(LessonStarted()),
+              child: LessonScreen(step: step),
+            );
           },
         ),
         GoRoute(
@@ -110,6 +136,26 @@ class AppRouter {
           builder: (context, state) {
             final args = state.extra as Map<String, String>;
             return QuizScreen(stepId: args['stepId']!, conceptId: args['conceptId']!);
+          },
+        ),
+        GoRoute(path: '/admin-graph', name: 'admin_graph', builder: (context, state) => const AdminGraphScreen()),
+        GoRoute(
+          path: '/adaptive-assessment',
+          name: 'adaptive_assessment',
+          builder: (context, state) {
+            // We pass the goalConceptId as the 'extra' argument
+            final goalId = state.extra as String;
+            return AdaptiveAssessmentScreen(goalConceptId: goalId);
+          },
+        ),
+        GoRoute(
+          path: '/achievements',
+          builder: (context, state) {
+            // 1. Extract the passed Bloc
+            final dashboardBloc = state.extra as DashboardBloc;
+
+            // 2. Wrap the screen in BlocProvider.value to make the existing bloc available
+            return BlocProvider.value(value: dashboardBloc, child: const AchievementsScreen());
           },
         ),
       ],
