@@ -80,39 +80,61 @@ class _QuizScreenViewState extends State<_QuizScreenView> {
                     style: TextStyle(color: Colors.grey.shade600),
                   ),
                   const SizedBox(height: 16),
-                  Text(currentQuestion.text, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+
+                  // Question Text & Hint Row
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          currentQuestion.text,
+                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                      if (currentQuestion.hint != null)
+                        IconButton(
+                          icon: const Icon(Icons.lightbulb_outline, color: Colors.amber),
+                          tooltip: 'Show Hint',
+                          onPressed: () => _showHint(context, currentQuestion.hint!),
+                        ),
+                    ],
+                  ),
                   const SizedBox(height: 24),
 
                   // Options List
-                  RadioGroup<int>(
-                    groupValue: selectedOption,
-                    onChanged: (int? val) {
-                      if (!state.isSubmitting && val != null) {
-                        context.read<StepQuizBloc>().add(
-                          QuizAnswerSelected(questionId: currentQuestion.id, optionIndex: val),
-                        );
-                      }
-                    },
-                    child: Column(
-                      children: List.generate(currentQuestion.options.length, (index) {
-                        final option = currentQuestion.options[index];
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 8.0),
-                          child: RadioListTile<int>(
-                            title: Text(option.text),
-                            value: index,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                              side: BorderSide(color: selectedOption == index ? Colors.blue : Colors.grey.shade300),
-                            ),
-                            tileColor: selectedOption == index ? Colors.blue.shade50 : null,
-                          ),
-                        );
-                      }),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      child: RadioGroup<int>(
+                        groupValue: selectedOption,
+                        onChanged: (int? val) {
+                          if (!state.isSubmitting && val != null) {
+                            context.read<StepQuizBloc>().add(
+                              QuizAnswerSelected(questionId: currentQuestion.id, optionIndex: val),
+                            );
+                          }
+                        },
+                        child: Column(
+                          children: List.generate(currentQuestion.options.length, (index) {
+                            final option = currentQuestion.options[index];
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 8.0),
+                              child: RadioListTile<int>(
+                                title: Text(option.text),
+                                value: index,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  side: BorderSide(color: selectedOption == index ? Colors.blue : Colors.grey.shade300),
+                                ),
+                                tileColor: selectedOption == index ? Colors.blue.shade50 : null,
+                              ),
+                            );
+                          }),
+                        ),
+                      ),
                     ),
                   ),
 
-                  const Spacer(),
+                  const SizedBox(height: 16),
 
                   ElevatedButton(
                     onPressed: !canProceed || state.isSubmitting
@@ -157,6 +179,38 @@ class _QuizScreenViewState extends State<_QuizScreenView> {
           return const SizedBox.shrink();
         },
       ),
+    );
+  }
+
+  void _showHint(BuildContext context, String hint) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (context) {
+        return Container(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.lightbulb, color: Colors.amber),
+                  const SizedBox(width: 8),
+                  Text('Hint', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Text(hint, style: const TextStyle(fontSize: 16, height: 1.5)),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(onPressed: () => Navigator.pop(context), child: const Text('Got it')),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -209,15 +263,10 @@ class _QuizScreenViewState extends State<_QuizScreenView> {
             onPressed: () {
               Navigator.pop(ctx); // Close Dialog
               if (passed) {
-                // Pass: Pop with true to indicate completion
                 context.pop(true);
               } else if (adaptation) {
-                // Adaptation: Pop with true (or special signal)
-                // We want to force the LessonScreen to close so the user sees the updated path list.
-                // Sending 'true' satisfies the LessonScreen's condition to context.pop().
                 context.pop(true);
               } else {
-                // Fail (No adaptation): Stay to review or pop false
                 context.pop(false);
               }
             },

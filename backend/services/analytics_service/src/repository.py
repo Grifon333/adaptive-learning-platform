@@ -80,7 +80,7 @@ class AnalyticsRepository:
         # We check “yesterday,” “the day before yesterday,” etc.
         # For MVP, we will simply return the number of days of activity per week as a “streak trend.”
         current_week_activity = sum(a.count for a in activity_list)
-        simulated_streak = min(current_week_activity, 7)  # Hack for demo
+        simulated_streak = min(current_week_activity, 1)  # Hack for demo
 
         return {"streak": simulated_streak, "chart": activity_list}
 

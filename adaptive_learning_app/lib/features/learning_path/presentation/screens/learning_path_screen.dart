@@ -7,12 +7,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
-class _UiStep {
-  _UiStep(this.step, {this.isHighlighted = false});
-  final LearningStepDto step;
-  final bool isHighlighted;
-}
-
 class LearningPathScreen extends StatelessWidget {
   const LearningPathScreen({super.key});
 
@@ -29,42 +23,23 @@ class LearningPathScreen extends StatelessWidget {
               child: Text('Error: ${state.error}', style: const TextStyle(color: Colors.red)),
             );
           } else if (state is LearningPathSuccess) {
-            final rawSteps = state.path.steps;
-            if (rawSteps.isEmpty) return const Center(child: Text('Path is empty.'));
-
-            final List<_UiStep> uiSteps = [];
-            bool pendingHighlight = false;
-            for (final step in rawSteps) {
-              if (step.isRemedial) {
-                pendingHighlight = true;
-              } else {
-                uiSteps.add(_UiStep(step, isHighlighted: pendingHighlight));
-                pendingHighlight = false; // Reset flag
-              }
-            }
+            final steps = state.path.steps;
+            if (steps.isEmpty) return const Center(child: Text('Path is empty.'));
 
             return ListView.separated(
               padding: const EdgeInsets.all(16),
-              itemCount: uiSteps.length,
-              separatorBuilder: (ctx, index) => _ConnectorLine(isActive: uiSteps[index].step.isCompleted),
+              itemCount: steps.length,
+              separatorBuilder: (ctx, index) => _ConnectorLine(isActive: steps[index].isCompleted),
               itemBuilder: (context, index) {
-                final uiStep = uiSteps[index];
-                final stepDto = uiStep.step;
+                final step = steps[index];
 
-                // Resolve concept name
-                final concept = state.conceptMap[stepDto.conceptId];
+                // Resolve concept name using the map from the state
+                final concept = state.conceptMap[step.conceptId];
 
-                // Determine lock state based on the FULL original list logic or simplified UI logic?
-                // Using helper extension on the DTO usually requires the full list to check previous steps.
-                // We pass the raw list to isLocked to ensure accurate dependency checking.
-                final isLocked = stepDto.isLocked(rawSteps);
+                // Calculate lock state
+                final isLocked = step.isLocked(steps);
 
-                return _StepCard(
-                  step: stepDto,
-                  concept: concept,
-                  isLocked: isLocked,
-                  isHighlighted: uiStep.isHighlighted,
-                );
+                return _StepCard(step: step, concept: concept, isLocked: isLocked);
               },
             );
           }
@@ -92,60 +67,82 @@ class _ConnectorLine extends StatelessWidget {
 }
 
 class _StepCard extends StatelessWidget {
-  const _StepCard({required this.step, required this.isLocked, required this.isHighlighted, this.concept});
+  const _StepCard({required this.step, required this.isLocked, this.concept});
 
   final LearningStepDto step;
   final ConceptDto? concept;
   final bool isLocked;
-  final bool isHighlighted;
 
   @override
   Widget build(BuildContext context) {
     final isCompleted = step.isCompleted;
 
-    // --- Style Logic ---
-    Color cardColor;
-    Color borderColor;
-    Color textColor;
-    Color iconColor;
-    IconData trailingIcon;
-    Color avatarBg;
-    Color avatarText;
+    // --- CASE 1: Remedial Step (Yellow, Indented, "Review Required") ---
+    if (step.isRemedial) {
+      return Container(
+        // Restore the indentation for remedial steps
+        margin: const EdgeInsets.only(left: 32, bottom: 8, top: 8),
+        child: Card(
+          elevation: isLocked ? 0 : 4,
+          color: isLocked ? Colors.grey.shade50 : Colors.orange.shade50,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(color: isLocked ? Colors.grey.shade200 : Colors.orange.shade200),
+          ),
+          child: ListTile(
+            contentPadding: const EdgeInsets.all(16),
+            leading: CircleAvatar(
+              backgroundColor: isLocked ? Colors.grey.shade200 : Colors.orange.shade100,
+              child: Icon(Icons.refresh, color: isLocked ? Colors.grey : Colors.orange),
+            ),
+            title: Text(
+              'Review Required',
+              style: TextStyle(fontWeight: FontWeight.bold, color: isLocked ? Colors.grey : Colors.brown),
+            ),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 4),
+                // Display the Concept Name instead of ID
+                Text(
+                  concept?.name ?? 'Unknown Concept',
+                  style: TextStyle(fontWeight: FontWeight.bold, color: Colors.brown.shade800),
+                ),
+                if (step.description != null) ...[
+                  const SizedBox(height: 2),
+                  Text(step.description!, style: TextStyle(color: Colors.brown.shade600, fontSize: 12)),
+                ],
+              ],
+            ),
+            trailing: isCompleted
+                ? const Icon(Icons.check_circle, color: Colors.green)
+                : Icon(Icons.arrow_forward, color: isLocked ? Colors.grey : Colors.orange),
+            onTap: isLocked ? null : () => _onStepTap(context),
+          ),
+        ),
+      );
+    }
+
+    // --- CASE 2: Standard Step (White/Green/Blue, Full Width) ---
+    Color cardColor = Colors.white;
+    Color textColor = Colors.black;
+    IconData trailingIcon = Icons.lock;
+    Color iconColor = Colors.grey;
+    Color avatarBg = Colors.grey.shade300;
+    Color avatarText = Colors.grey;
 
     if (isLocked) {
-      // Locked State
       cardColor = Colors.grey.shade50;
-      borderColor = Colors.grey.shade200;
       textColor = Colors.grey;
-      iconColor = Colors.grey;
-      trailingIcon = Icons.lock;
       avatarBg = Colors.grey.shade200;
-      avatarText = Colors.grey;
     } else if (isCompleted) {
-      // Completed State
-      cardColor = Colors.white;
-      borderColor = Colors.green.shade100;
-      textColor = Colors.black;
-      iconColor = Colors.green;
       trailingIcon = Icons.check_circle;
+      iconColor = Colors.green;
       avatarBg = Colors.green.shade100;
       avatarText = Colors.green.shade800;
-    } else if (isHighlighted) {
-      // Highlighted (Remedial context merged)
-      cardColor = Colors.orange.shade50;
-      borderColor = Colors.orange.shade200;
-      textColor = Colors.brown.shade900;
-      iconColor = Colors.orange.shade800;
-      trailingIcon = Icons.priority_high; // Indicates attention needed
-      avatarBg = Colors.orange.shade100;
-      avatarText = Colors.orange.shade900;
     } else {
-      // Standard Active State
-      cardColor = Colors.white;
-      borderColor = Colors.blue.shade100;
-      textColor = Colors.black;
-      iconColor = Colors.blue;
       trailingIcon = Icons.play_circle_fill;
+      iconColor = Colors.blue;
       avatarBg = Colors.blue.shade100;
       avatarText = Colors.blue.shade800;
     }
@@ -155,7 +152,7 @@ class _StepCard extends StatelessWidget {
       color: cardColor,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: borderColor),
+        side: isLocked ? BorderSide(color: Colors.grey.shade300) : BorderSide.none,
       ),
       child: ListTile(
         contentPadding: const EdgeInsets.all(16),
@@ -167,35 +164,22 @@ class _StepCard extends StatelessWidget {
           ),
         ),
         title: Text(
-          concept?.name ?? 'Unknown Concept',
+          'Step ${step.stepNumber}',
           style: TextStyle(fontWeight: FontWeight.bold, color: textColor),
         ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SizedBox(height: 4),
-            if (concept?.description != null)
-              Text(
-                concept!.description!,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: isLocked
-                      ? Colors.grey.shade400
-                      : (isHighlighted ? Colors.brown.shade400 : Colors.grey.shade600),
-                ),
+            // Display Concept Name
+            Text(
+              concept?.name ?? 'Unknown',
+              style: TextStyle(
+                color: isLocked ? Colors.grey.shade400 : Colors.grey.shade600,
+                fontWeight: FontWeight.w500,
               ),
-            if (!isLocked && isHighlighted) ...[
-              const SizedBox(height: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(color: Colors.orange.shade100, borderRadius: BorderRadius.circular(4)),
-                child: const Text(
-                  'Recommended Review',
-                  style: TextStyle(fontSize: 11, color: Colors.brown, fontWeight: FontWeight.bold),
-                ),
-              ),
-            ] else if (!isLocked) ...[
+            ),
+            if (!isLocked) ...[
               const SizedBox(height: 4),
               Text('${step.resources.length} materials', style: const TextStyle(fontSize: 12)),
             ],
@@ -217,11 +201,6 @@ class _StepCard extends StatelessWidget {
   void _onStepTap(BuildContext context) async {
     await context.pushNamed('lesson', extra: step);
     if (context.mounted) {
-      // STATUS UPDATE:
-      // When we return from class, we don't know if the student passed the test.
-      // But we know we need to check.
-      // The easiest way is to reload the path.
-      // In a real application, this can be optimized.
       final authState = context.read<AuthBloc>().state;
       final studentId = (authState is AuthAuthenticated) ? authState.userId : '';
       context.read<LearningPathBloc>().add(LearningPathRefreshRequested(studentId));
